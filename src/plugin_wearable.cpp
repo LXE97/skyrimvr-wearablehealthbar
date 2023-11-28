@@ -22,10 +22,10 @@ namespace wearable
     vr::TrackedDeviceIndex_t g_l_controller;
     vr::TrackedDeviceIndex_t g_r_controller;
 
-    TESForm ThumbRForm;
-    TESForm ThumbLForm;
-    TESForm MultiRForm;
-    TESForm MultLForm;
+    TESForm *ThumbRForm;
+    TESForm *ThumbLForm;
+    TESForm *MultiRForm;
+    TESForm *MultLForm;
 
     // DEBUG
     int32_t g_debugLHandDrawSphere;
