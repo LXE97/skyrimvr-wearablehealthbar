@@ -7,7 +7,7 @@ namespace vrinput
         uint8_t flags;
         InputCallbackFunc func;
 
-        bool operator==(const InputCallback &a_rhs) { return (flags == a_rhs.flags) && (func == a_rhs.func); }
+        bool operator==(const InputCallback& a_rhs) { return (flags == a_rhs.flags) && (func == a_rhs.func); }
     };
 
     // each button id is mapped to a list of callback funcs
@@ -18,7 +18,7 @@ namespace vrinput
         return (0u | touch << 2 | buttonPress << 1 | (uint8_t)isLeft);
     }
 
-    void processButtonChanges(uint64_t changedMask, uint64_t currentState, bool isLeft, bool touch, vr::VRControllerState_t *out)
+    void processButtonChanges(uint64_t changedMask, uint64_t currentState, bool isLeft, bool touch, vr::VRControllerState_t* out)
     {
         // iterate through each of the button codes that we care about
         for (auto buttonID : all_buttons)
@@ -92,6 +92,6 @@ namespace vrinput
         }
     }
 
-    
+
 
 }
