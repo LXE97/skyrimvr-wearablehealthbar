@@ -43,7 +43,7 @@ namespace wearable
         SKSE::log::trace("A press ");
         if (!MenuChecker::isGameStopped())
         {
-            helper::GetHealthPercent(g_player);
+
         }
         return false;
     }
@@ -63,7 +63,25 @@ namespace wearable
         {
             vrinput::AddCallback(vr::k_EButton_ApplicationMenu, onDEBUGBtnReleaseB, Right, Press, ButtonUp);
 
-            return true;
+            auto p = PlayerCharacter::GetSingleton();
+            auto a = p->AsActorValueOwner();
+            SKSE::log::info("GetActorValue: {} \nGetBaseActorValue: {}\nGetClampedActorValue: {}\nGetPermanentActorValue: {}  ",
+                a->GetActorValue(ActorValue::kHealth),
+                a->GetBaseActorValue(ActorValue::kHealth),
+                a->GetClampedActorValue(ActorValue::kHealth),
+                a->GetPermanentActorValue(ActorValue::kHealth)
+            );
+
+            SKSE::log::info("kDamage: {} \nkPermanent: {}\nkTemporary: {}\nkTotal: {}  ",
+                p->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kDamage, ActorValue::kHealth),
+                p->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kPermanent, ActorValue::kHealth),
+                p->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kTemporary, ActorValue::kHealth),
+                p->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kTotal, ActorValue::kHealth)
+            );
+            
+
+
+                return true;
         }
         return false;
     }

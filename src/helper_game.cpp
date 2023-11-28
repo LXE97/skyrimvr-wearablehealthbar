@@ -18,13 +18,13 @@ namespace helper
         return nullptr;
     }
 
-    float GetHealthPercent(Actor* a)
+    float GetHealthPercent(ActorValueOwner* a)
     {
         SKSE::log::info("GetActorValue: {} \nGetBaseActorValue: {}\nGetClampedActorValue: {}\nGetPermanentActorValue: {}  ",
-        a->AsActorValueOwner()->GetActorValue(ActorValue::kHealth),
-        a->AsActorValueOwner()->GetBaseActorValue(ActorValue::kHealth),
-        a->AsActorValueOwner()->GetClampedActorValue(ActorValue::kHealth),
-        a->AsActorValueOwner()->GetPermanentActorValue(ActorValue::kHealth)
+        a->GetActorValue(ActorValue::kHealth),
+        a->GetBaseActorValue(ActorValue::kHealth),
+        a->GetClampedActorValue(ActorValue::kHealth),
+        a->GetPermanentActorValue(ActorValue::kHealth)
         );
         return 0;
     }
