@@ -17,7 +17,9 @@ namespace vrinput
     class OverlapSphereManager
     {
     public:
+        // This has to be called by some periodic function in the plugin file, e.g. PlayerCharacter::Update or OpenVR input callbacks
         void Update();
+
         static OverlapSphereManager* GetSingleton()
         {
             static OverlapSphereManager singleton;
@@ -66,16 +68,18 @@ namespace vrinput
 
         std::mutex CastSpellMutex;
 
+        // constants
         static constexpr float hysteresis = 20; // squared distance threshold before changing to off state
-        static constexpr float hysteresis_angular = helper::deg2rad(1);
+        static constexpr float hysteresis_angular = helper::deg2rad(3);
         static constexpr RE::NiPoint3 NPCHandPalmNormal = { 0, -1, 0 };
-        RE::SpellItem* DrawSphereSpell;
-        RE::EffectSetting* DrawSphereMGEF;
         static constexpr const char* DrawSphereSpellEditorName = "Z4K_HolsterDebugSphere";
         static constexpr const char* DrawSphereMGEFEditorName = "Z4K_HolsterDebugSphereMGEF";
         static constexpr const char* DrawNodeName = "Z4K_OVERLAPSPHERE";
         static constexpr const char* DrawNodePointerName = "Z4K_OVERLAPNORMAL";
         static constexpr const char* DrawNewParentNode = "NPC Root [Root]"; // choice of root node is arbitrary
+
+        RE::SpellItem* DrawSphereSpell;
+        RE::EffectSetting* DrawSphereMGEF;
         RE::NiColor* TURNON;
         RE::NiColor* TURNOFF;
     };

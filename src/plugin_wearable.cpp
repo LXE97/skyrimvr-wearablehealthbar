@@ -22,16 +22,22 @@ namespace wearable
     vr::TrackedDeviceIndex_t g_l_controller;
     vr::TrackedDeviceIndex_t g_r_controller;
 
+    TESForm ThumbRForm;
+    TESForm ThumbLForm;
+    TESForm MultiRForm;
+    TESForm MultLForm;
+
     // DEBUG
     int32_t g_debugLHandDrawSphere;
     int32_t g_debugRHandDrawSphere;
-    NiPoint3 g_higgs_palmPosHandspace; 
+    NiPoint3 g_higgs_palmPosHandspace;
     NiPoint3 g_NPCHandPalmNormal = { 0, -1, 0 };
 
+    // TODO config file
     vr::EVRButtonId g_config_SecondaryBtn = vr::k_EButton_A;
     vr::EVRButtonId g_config_PrimaryBtn = vr::k_EButton_SteamVR_Trigger;
 
-    // Button presses
+
     bool onDEBUGBtnPressA()
     {
         SKSE::log::trace("A press ");
@@ -49,6 +55,7 @@ namespace wearable
         vrinput::RemoveCallback(vr::k_EButton_ApplicationMenu, onDEBUGBtnReleaseB, Right, Press, ButtonUp);
         return false;
     }
+
     bool onDEBUGBtnPressB()
     {
         SKSE::log::trace("B press ");
@@ -68,7 +75,6 @@ namespace wearable
         {
             SKSE::log::info("equip event: looking up formid");
             auto item = TESForm::LookupByID(event->baseObject);
-           
         }
     }
 
@@ -83,16 +89,14 @@ namespace wearable
         g_r_controller = g_OVRHookManager->GetVRSystem()->GetTrackedDeviceIndexForControllerRole(vr::TrackedControllerRole_RightHand);
         RegisterVRInputCallback();
 
-        // Register MenuOpenCloseEvent handler
         MenuChecker::begin();
 
         // HIGGS setup
         if (g_higgsInterface)
         {
-            // TODO: read this from our config
+            // TODO: read this from config
             g_higgs_palmPosHandspace = { 0, -2.4, 6 };
             vrinput::OverlapSphereManager::GetSingleton()->palmoffset = g_higgs_palmPosHandspace;
-
         }
 
         // register event sinks and handlers
@@ -106,6 +110,8 @@ namespace wearable
 
     void GameLoad()
     {
+        g_player = RE::PlayerCharacter::GetSingleton();
+
         // DEBUG: draw hand nodes with higgs offset
         vrinput::OverlapSphereManager::GetSingleton()->ShowHolsterSpheres();
         g_debugLHandDrawSphere = vrinput::OverlapSphereManager::GetSingleton()->Create(

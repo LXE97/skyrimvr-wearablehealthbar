@@ -12,8 +12,6 @@
 #include "mod_input.h"
 #include "mod_eventSink.hpp"
 
-class AnimationDataManager;
-
 namespace wearable
 {
     extern SKSE::detail::SKSETaskInterface* g_task;
@@ -22,27 +20,17 @@ namespace wearable
     extern vr::TrackedDeviceIndex_t g_l_controller;
     extern vr::TrackedDeviceIndex_t g_r_controller;
 
-    // Main plugin entry point
     void StartMod();
     void GameLoad();
     void PreGameLoad();
 
-    // Event handlers
-    void onMenuOpenClose(const RE::MenuOpenCloseEvent* event);
-    void OnOverlap(const vrinput::OverlapEvent& e);
+    bool onDEBUGBtnPressA();
+    bool onDEBUGBtnReleaseB();
+    bool onDEBUGBtnPressB();
+    void onEquipEvent(const RE::TESEquipEvent* event);
+    void onOverlap(const vrinput::OverlapEvent& e);
 
+    // low level input
+    bool ControllerInput_CB(vr::TrackedDeviceIndex_t unControllerDeviceIndex, const vr::VRControllerState_t* pControllerState, uint32_t unControllerStateSize, vr::VRControllerState_t* pOutputControllerState);
     void RegisterVRInputCallback();
-
-    // Utilities
-    inline double GetQPC() noexcept
-    {
-        LARGE_INTEGER f, i;
-        if (QueryPerformanceCounter(&i) && QueryPerformanceFrequency(&f))
-        {
-            auto frequency = 1.0 / static_cast<double>(f.QuadPart);
-            return static_cast<double>(i.QuadPart) * frequency;
-        }
-        return 0.0;
-    }
-
 }
