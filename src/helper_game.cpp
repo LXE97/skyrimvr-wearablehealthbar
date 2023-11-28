@@ -18,18 +18,33 @@ namespace helper
         return nullptr;
     }
 
-    float GetHealthPercent(ActorValueOwner* a)
+    float GetHealthPercent(Actor* a)
     {
-        SKSE::log::info("GetActorValue: {} \nGetBaseActorValue: {}\nGetClampedActorValue: {}\nGetPermanentActorValue: {}  ",
-        a->GetActorValue(ActorValue::kHealth),
-        a->GetBaseActorValue(ActorValue::kHealth),
-        a->GetClampedActorValue(ActorValue::kHealth),
-        a->GetPermanentActorValue(ActorValue::kHealth)
-        );
-        return 0;
+        float current = a->AsActorValueOwner()->GetActorValue(ActorValue::kHealth);
+        float base = a->AsActorValueOwner()->GetBaseActorValue(ActorValue::kHealth);
+        float mod = a->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kPermanent, ActorValue::kHealth) +
+            a->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kTemporary, ActorValue::kHealth);
+        return current / (base + mod);
     }
-    float GetMagickaPercent(Actor* a) { return 0; }
-    float GetStaminaPercent(Actor* a) { return 0; }
+
+    float GetMagickaPercent(Actor* a)
+    {
+        float current = a->AsActorValueOwner()->GetActorValue(ActorValue::kMagicka);
+        float base = a->AsActorValueOwner()->GetBaseActorValue(ActorValue::kMagicka);
+        float mod = a->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kPermanent, ActorValue::kMagicka) +
+            a->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kTemporary, ActorValue::kMagicka);
+        return current / (base + mod);
+    }
+
+    float GetStaminaPercent(Actor* a)
+    {
+        float current = a->AsActorValueOwner()->GetActorValue(ActorValue::kStamina);
+        float base = a->AsActorValueOwner()->GetBaseActorValue(ActorValue::kStamina);
+        float mod = a->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kPermanent, ActorValue::kStamina) +
+            a->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kTemporary, ActorValue::kHealth);
+        return current / (base + mod);
+    }
+    
     float GetEnchantPercent(Actor* a, bool isLeft) { return 0; }
     float GetIngameTime(Actor* a) { return 0; }
     float GetAmmoPercent(Actor* a) { return 0; }

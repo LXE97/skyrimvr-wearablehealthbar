@@ -1,4 +1,4 @@
-## (WIP) SKSE plugin source for Skyrim mod: Wearable Healthbars
+## (WIP) SKSE plugin source for Skyrim mod: [Wearable Healthbars](https://www.nexusmods.com/skyrimspecialedition/mods/65737)
 
 ## Build instructions:
 1. install [vcpkg](https://github.com/microsoft/vcpkg)
