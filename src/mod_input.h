@@ -2,10 +2,10 @@
 #include "VR/PapyrusVRAPI.h"
 
 namespace vrinput
-{ 
-    enum whichController {Left = true, Right = false};
-    enum touchOrPress {Touch = true, Press = false};
-    enum buttonupOrButtondown {ButtonDown = true, ButtonUp = false};
+{
+    enum whichController { Left = true, Right = false };
+    enum touchOrPress { Touch = true, Press = false };
+    enum buttonupOrButtondown { ButtonDown = true, ButtonUp = false };
 
     constexpr std::array all_buttons{
         vr::k_EButton_System,
@@ -31,5 +31,5 @@ namespace vrinput
     void RemoveCallback(const vr::EVRButtonId button, InputCallbackFunc callback, bool isLeft, bool onTouch, bool onButtonDown);
 
     // Must be called by the ControllerStateCB registered to the OpenVR Hook Manager when a change in button states is detected
-    void processButtonChanges(uint64_t changedMask, uint64_t currentState, bool isLeft, bool touch, vr::VRControllerState_t *out);
+    void processButtonChanges(uint64_t changedMask, uint64_t currentState, bool isLeft, bool touch, vr::VRControllerState_t* out);
 }

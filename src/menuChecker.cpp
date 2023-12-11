@@ -22,9 +22,9 @@ namespace MenuChecker
         return false;
     }
 
-    void onMenuOpenClose(RE::MenuOpenCloseEvent const *evn)
+    void onMenuOpenClose(RE::MenuOpenCloseEvent const* evn)
     {
-        const char *menuName = evn->menuName.data();
+        const char* menuName = evn->menuName.data();
 
         if (evn->opening)
         { // Menu opened
@@ -46,14 +46,12 @@ namespace MenuChecker
 
     void begin()
     {
-        static bool runOnce = true;
-        if (runOnce)
-        {
+        std::once_flag once;
+        std::call_once(once, []() {
             auto menuSink = EventSink<RE::MenuOpenCloseEvent>::GetSingleton();
             menuSink->AddCallback(onMenuOpenClose);
             RE::UI::GetSingleton()->AddEventSink(menuSink);
-            runOnce = false;
-        }
+            });
     }
 
     std::vector<std::string> gameStoppingMenus{
@@ -87,10 +85,10 @@ namespace MenuChecker
         "StatsMenuPerks",
         "Training Menu",
         "Tutorial Menu",
-        "TweenMenu"};
+        "TweenMenu" };
 
     std::unordered_map<std::string, bool> menuTypes(
-        {{"BarterMenu", false},
+        { {"BarterMenu", false},
          {"Book Menu", false},
          {"Console", false},
          {"Native UI Menu", false},
@@ -131,6 +129,6 @@ namespace MenuChecker
          {"WSEnemyMeters", false},
          {"WSDebugOverlay", false},
          {"WSActivateRollover", false},
-         {"LoadWaitSpinner", false}});
+         {"LoadWaitSpinner", false} });
 
 }

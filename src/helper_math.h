@@ -11,7 +11,7 @@ namespace helper
     }
 
     // get rotation about Z axis while ignoring other rotations
-    inline float GetAzimuth(NiMatrix3 &rot)
+    inline float GetAzimuth(NiMatrix3& rot)
     {
         if (std::abs(rot.entry[2][1]) < 0.9995f)
         {
@@ -23,25 +23,25 @@ namespace helper
         }
     }
     // same but X axis
-    inline float GetElevation(NiMatrix3 &rot)
+    inline float GetElevation(NiMatrix3& rot)
     {
         return -1.0f * std::asin(std::clamp(rot.entry[2][1], -1.0f, 1.0f));
     }
 
-    void RotateZ(NiPoint3 &target, NiMatrix3 &rotator);
+    void RotateZ(NiPoint3& target, NiMatrix3& rotator);
 
     // vector stuff from higgs
-    inline float VectorLengthSquared(const NiPoint3 &vec) { return vec.x * vec.x + vec.y * vec.y + vec.z * vec.z; }
-    inline float VectorLength(const NiPoint3 &vec) { return sqrtf(VectorLengthSquared(vec)); }
-    inline float DotProductSafe(const NiPoint3 &vec1, const NiPoint3 &vec2) { return std::clamp(vec1.Dot(vec2), -1.f, 1.f); }
-    inline NiPoint3 VectorNormalized(const NiPoint3 &vec)
+    inline float VectorLengthSquared(const NiPoint3& vec) { return vec.x * vec.x + vec.y * vec.y + vec.z * vec.z; }
+    inline float VectorLength(const NiPoint3& vec) { return sqrtf(VectorLengthSquared(vec)); }
+    inline float DotProductSafe(const NiPoint3& vec1, const NiPoint3& vec2) { return std::clamp(vec1.Dot(vec2), -1.f, 1.f); }
+    inline NiPoint3 VectorNormalized(const NiPoint3& vec)
     {
         float length = VectorLength(vec);
         return length > 0.0f ? vec / length : NiPoint3();
     }
 
-    NiPoint3 GetPalmVectorWS(NiMatrix3 &handRotation, bool isLeft);
-    NiPoint3 GetThumbVector(NiMatrix3 &handRotation);
+    NiPoint3 GetPalmVectorWS(NiMatrix3& handRotation, bool isLeft);
+    NiPoint3 GetThumbVector(NiMatrix3& handRotation);
 
     // matrix stuff
 
@@ -71,7 +71,7 @@ namespace helper
         return result;
     }
 
-    inline void Quat2Mat(NiMatrix3 &matrix, NiQuaternion &quaternion)
+    inline void Quat2Mat(NiMatrix3& matrix, NiQuaternion& quaternion)
     {
         float xx = quaternion.x * quaternion.x;
         float xy = quaternion.x * quaternion.y;
@@ -98,7 +98,7 @@ namespace helper
         matrix.entry[2][2] = 1 - 2 * (xx + yy);
     }
 
-    inline void slerpQuat(float interp, NiQuaternion &q1, NiQuaternion &q2, NiMatrix3 &out)
+    inline void slerpQuat(float interp, NiQuaternion& q1, NiQuaternion& q2, NiMatrix3& out)
     {
         // Convert mat1 to a quaternion
         float q1w = q1.w;

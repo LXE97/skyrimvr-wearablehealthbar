@@ -18,15 +18,13 @@ target_include_directories(${PROJECT_NAME} PRIVATE include src)
 
 if(DEFINED OUTPUT_FOLDER)
     # Copy the SKSE plugin .dll files into the SKSE/Plugins/ folder
-    set(DLL_FOLDER OUTPUT_FOLDER)
-
     message(STATUS "SKSE plugin output folder: ${DLL_FOLDER}")
 
     add_custom_command(
         TARGET "${PROJECT_NAME}"
         POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "${DLL_FOLDER}"
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:${PROJECT_NAME}>" "${DLL_FOLDER}/$<TARGET_FILE_NAME:${PROJECT_NAME}>"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${OUTPUT_FOLDER}"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:${PROJECT_NAME}>" "${OUTPUT_FOLDER}/$<TARGET_FILE_NAME:${PROJECT_NAME}>"
         VERBATIM
     )
 endif()
