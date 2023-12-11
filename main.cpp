@@ -1,6 +1,3 @@
-#undef ENABLE_SKYRIM_AE
-#undef ENABLE_SKYRIM_SE
-
 #include "plugin_wearable.h"  // main source for plugin game logic
 #include <spdlog/sinks/basic_file_sink.h>
 #include "SKSE/API.h"

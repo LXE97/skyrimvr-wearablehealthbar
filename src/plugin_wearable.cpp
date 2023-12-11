@@ -5,6 +5,7 @@
 #include "menuChecker.h"
 #include "helper_math.h"
 #include "helper_game.h"
+#include "Hooks.hpp"
 
 namespace wearable
 {
@@ -38,11 +39,25 @@ namespace wearable
     vr::EVRButtonId g_config_PrimaryBtn = vr::k_EButton_SteamVR_Trigger;
 
 
+
+
     bool onDEBUGBtnPressA()
     {
         SKSE::log::trace("A press ");
         if (!MenuChecker::isGameStopped())
         {
+            if (auto node = g_player->Get3D1(false)->GetObjectByName("Mara")){
+                SKSE::log::info("spell node found");
+                if (auto target = g_player->Get3D1(false)->GetObjectByName("NPC R Finger02 [RF02]")){
+                    target->AsNode()->AttachChild(node);
+                    SKSE::log::info("attched");
+                }else{
+                    SKSE::log::info("noo2");
+                }
+                
+            } else {
+                SKSE::log::info("noo");
+            }
 
         }
         return false;
@@ -50,38 +65,28 @@ namespace wearable
 
     bool onDEBUGBtnReleaseB()
     {
-        SKSE::log::trace("B press ");
+        SKSE::log::trace("B release ");
 
-        vrinput::RemoveCallback(vr::k_EButton_ApplicationMenu, onDEBUGBtnReleaseB, Right, Press, ButtonUp);
+        //vrinput::RemoveCallback(vr::k_EButton_ApplicationMenu, onDEBUGBtnReleaseB, Right, Press, ButtonUp);
         return false;
     }
 
     bool onDEBUGBtnPressB()
     {
-        SKSE::log::trace("B press ");
+        //SKSE::log::trace("B press ");
+        SKSE::log::trace("{}", Hooks::poop);
         if (!MenuChecker::isGameStopped())
         {
-            vrinput::AddCallback(vr::k_EButton_ApplicationMenu, onDEBUGBtnReleaseB, Right, Press, ButtonUp);
-
-            auto p = PlayerCharacter::GetSingleton();
-            auto a = p->AsActorValueOwner();
-            SKSE::log::info("GetActorValue: {} \nGetBaseActorValue: {}\nGetClampedActorValue: {}\nGetPermanentActorValue: {}  ",
-                a->GetActorValue(ActorValue::kHealth),
-                a->GetBaseActorValue(ActorValue::kHealth),
-                a->GetClampedActorValue(ActorValue::kHealth),
-                a->GetPermanentActorValue(ActorValue::kHealth)
-            );
-
-            SKSE::log::info("kDamage: {} \nkPermanent: {}\nkTemporary: {}\nkTotal: {}  ",
-                p->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kDamage, ActorValue::kHealth),
-                p->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kPermanent, ActorValue::kHealth),
-                p->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kTemporary, ActorValue::kHealth),
-                p->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kTotal, ActorValue::kHealth)
-            );
             
+            if (auto attachspell = helper::LookupByName(RE::FormType::Spell, "AttachMesh"))
+            {
+                SKSE::log::trace("spell found");
+                helper::CastSpellInstant(g_player, g_player, attachspell->As<RE::SpellItem>());
+            } else {
+                SKSE::log::trace("spel not found");
+            }
 
-
-                return true;
+            return true;
         }
         return false;
     }
@@ -102,6 +107,8 @@ namespace wearable
 
     void StartMod()
     {
+        Hooks::Install();
+
         // VR init
         g_l_controller = g_OVRHookManager->GetVRSystem()->GetTrackedDeviceIndexForControllerRole(vr::TrackedControllerRole_LeftHand);
         g_r_controller = g_OVRHookManager->GetVRSystem()->GetTrackedDeviceIndexForControllerRole(vr::TrackedControllerRole_RightHand);
@@ -131,11 +138,13 @@ namespace wearable
         g_player = RE::PlayerCharacter::GetSingleton();
 
         // DEBUG: draw hand nodes with higgs offset
+        /*
         vrinput::OverlapSphereManager::GetSingleton()->ShowHolsterSpheres();
         g_debugLHandDrawSphere = vrinput::OverlapSphereManager::GetSingleton()->Create(
             g_player->GetVRNodeData()->NPCLHnd.get(), &g_higgs_palmPosHandspace, 1, &g_NPCHandPalmNormal, 0, false, true);
         g_debugRHandDrawSphere = vrinput::OverlapSphereManager::GetSingleton()->Create(
             g_player->GetVRNodeData()->NPCRHnd.get(), &g_higgs_palmPosHandspace, 1, &g_NPCHandPalmNormal, 0, false, true);
+            */
     }
 
     void PreGameLoad()

@@ -18,47 +18,98 @@ namespace helper
         return nullptr;
     }
 
-    float GetHealthPercent(Actor* a)
+    float GetAVPercent(Actor* a, ActorValue v)
     {
-        float current = a->AsActorValueOwner()->GetActorValue(ActorValue::kHealth);
-        float base = a->AsActorValueOwner()->GetBaseActorValue(ActorValue::kHealth);
-        float mod = a->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kPermanent, ActorValue::kHealth) +
-            a->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kTemporary, ActorValue::kHealth);
+        float current = a->AsActorValueOwner()->GetActorValue(v);
+        float base = a->AsActorValueOwner()->GetBaseActorValue(v);
+        float mod = a->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kPermanent, v) +
+            a->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kTemporary, v);
         return current / (base + mod);
     }
 
-    float GetMagickaPercent(Actor* a)
+    float GetChargePercent(Actor* a, bool isLeft)
     {
-        float current = a->AsActorValueOwner()->GetActorValue(ActorValue::kMagicka);
-        float base = a->AsActorValueOwner()->GetBaseActorValue(ActorValue::kMagicka);
-        float mod = a->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kPermanent, ActorValue::kMagicka) +
-            a->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kTemporary, ActorValue::kMagicka);
-        return current / (base + mod);
+        if (auto equipped = a->GetEquippedObject(isLeft))
+        {
+            if (equipped->IsWeapon()) {
+                float current = a->AsActorValueOwner()->GetActorValue(ActorValue::kRightItemCharge);
+
+                // player made items
+                if (auto entryData = a->GetEquippedEntryData(isLeft))
+                {
+                    for (auto& x : *(entryData->extraLists))
+                    {
+                        if (auto e = x->GetByType<ExtraEnchantment>())
+                        {
+                            return std::clamp(current / e->charge, 0.f, 100.f);
+                        }
+                    }
+                }
+
+                // prefab items
+                if (auto ench = equipped->As<TESEnchantableForm>())
+                {
+                    return std::clamp(current / (float)(ench->amountofEnchantment), 0.f, 100.f);
+                }
+            }
+        }
+        return 0;
     }
 
-    float GetStaminaPercent(Actor* a)
+    float GetGameHour()
     {
-        float current = a->AsActorValueOwner()->GetActorValue(ActorValue::kStamina);
-        float base = a->AsActorValueOwner()->GetBaseActorValue(ActorValue::kStamina);
-        float mod = a->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kPermanent, ActorValue::kStamina) +
-            a->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kTemporary, ActorValue::kHealth);
-        return current / (base + mod);
+        if (auto c = Calendar::GetSingleton())
+        {
+            return c->GetHour();
+        }
+        return 0;
     }
-    
-    float GetEnchantPercent(Actor* a, bool isLeft) { return 0; }
-    float GetIngameTime(Actor* a) { return 0; }
-    float GetAmmoPercent(Actor* a) { return 0; }
-    float GetStealthPercent(Actor* a) { return 0; }
-    float GetShoutCooldownPercent(Actor* a) { return 0; }
+
+    float GetAmmoPercent(Actor* a, float ammoCountMult)
+    {
+        if (auto ammo = a->GetCurrentAmmo())
+        {
+            auto countmap = a->GetInventoryCounts();
+            if (countmap[ammo])
+            {
+                return std::clamp(countmap[ammo] * ammoCountMult, 0.f, 100.f);
+            }
+        }
+        return 0;
+    }
+
+    float GetShoutCooldownPercent(Actor* a, float MaxCDTime)
+    {
+        return std::clamp(a->GetVoiceRecoveryTime() / MaxCDTime, 0.f, 100.f);
+    }
 
     void SetGlowMult() {}
-    void SetGlowColor() {}
+
+    void SetGlowColor(NiAVObject* target, NiColor* c)
+    {
+        auto geometry = target->GetFirstGeometryOfShaderType(RE::BSShaderMaterial::Feature::kGlowMap);
+        if (geometry)
+        {
+            auto shaderProp = geometry->GetGeometryRuntimeData().properties[RE::BSGeometry::States::kEffect].get();
+            if (shaderProp)
+            {
+                auto shader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProp);
+                if (shader)
+                {
+                    shader->emissiveColor = c;
+                }
+            }
+        }
+    }
+
     void SetSpecularMult() {}
     void SetSpecularColor() {}
     void SetTintColor() {}
 
-    void CastSpellInstant(Actor* src, Actor* target, SpellItem* spell) {
-        if (src && target && spell) {
+    void CastSpellInstant(Actor* src, Actor* target, SpellItem* spell)
+    {
+        if (src && target && spell)
+        {
             auto caster = src->GetMagicCaster(MagicSystem::CastingSource::kInstant);
             if (caster)
             {
@@ -67,7 +118,8 @@ namespace helper
         }
     }
 
-    void Dispel(Actor* src, Actor* target, SpellItem* spell) {
+    void Dispel(Actor* src, Actor* target, SpellItem* spell)
+    {
         if (src && target && spell) {
             auto handle = src->GetHandle();
             if (handle)

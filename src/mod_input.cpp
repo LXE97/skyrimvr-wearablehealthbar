@@ -12,6 +12,7 @@ namespace vrinput
 
     // each button id is mapped to a list of callback funcs
     std::unordered_map<vr::EVRButtonId, std::vector<InputCallback>> callbacks;
+    std::unordered_map<vr::EVRButtonId, bool> buttonStates;
 
     inline uint8_t packEventFlags(bool touch, bool buttonPress, bool isLeft)
     {
@@ -91,7 +92,5 @@ namespace vrinput
             callbacks[button].erase(it);
         }
     }
-
-
 
 }

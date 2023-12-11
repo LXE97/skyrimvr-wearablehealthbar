@@ -11,6 +11,7 @@
 
 #include "mod_input.h"
 #include "mod_eventSink.hpp"
+#include "wearable.h"
 
 namespace wearable
 {
