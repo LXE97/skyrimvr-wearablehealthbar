@@ -47,19 +47,6 @@ namespace wearable
         if (!MenuChecker::isGameStopped())
         {
 
-
-
-            if (shit) {
-                //SKSE::log::trace("cool 4");
-                shit->SetModel("debug/InteractionSphere.nif");
-                //SKSE::log::trace("cool 5");
-                g_player->ApplyArtObject(shit, -1.0f, nullptr, false, false, g_player->GetNodeByName("NPC Root [Root]"));
-                //SKSE::log::trace("cool 6");
-            }
-
-
-
-
             /*
             auto* data = RE::TESDataHandler::GetSingleton();
 
@@ -71,7 +58,6 @@ namespace wearable
 
             const auto& [map, lock] = TESForm::GetAllForms();
             [[maybe_unused]] const BSReadWriteLock l{ lock };
- SKSE::log::trace("shitffffff");
             auto it = map->begin();
             for (; it != map->end(); std::advance(it, 1))
             {
@@ -90,20 +76,9 @@ namespace wearable
         SKSE::log::trace("B press ");
         if (!MenuChecker::isGameStopped())
         {
-            crap = TESForm::LookupByID(0x9405f);// trailer fx02
-            //SKSE::log::trace("cool ");
-            if (crap) {
-                auto temp = crap->CreateDuplicateForm(false, nullptr);
-                //SKSE::log::trace("cool 2");
-                if (temp)
-                {
-                    //SKSE::log::trace("cool 3");
-                    shit = temp->As<BGSArtObject>();
 
-                }
-
-            }
-        }return false;
+        }
+        return false;
     }
 
     void onEquipEvent(const TESEquipEvent* event)
@@ -120,8 +95,24 @@ namespace wearable
     {
     }
 
-    void Update(){
+    static int debugcounter = 0;
+    void Update() {
+
         vrinput::OverlapSphereManager::GetSingleton()->Update();
+
+        if (1 && debugcounter++ % 200 == 0) {
+
+            RE::NiNode* aa = g_player->Get3D(false)->GetObjectByName("Camera Control")->AsNode();
+            RE::NiNode* bb = g_player->GetVRNodeData()->UprightHmdNode.get();
+
+
+            SKSE::log::debug("post a: {} {} {}",
+                aa->world.translate.x, aa->world.translate.y, aa->world.translate.z);
+
+            SKSE::log::debug("post b: {} {} {}",
+                bb->world.translate.x, bb->world.translate.y, bb->world.translate.z);
+
+        }
     }
 
     void StartMod()
@@ -158,13 +149,11 @@ namespace wearable
         g_player = RE::PlayerCharacter::GetSingleton();
 
         // DEBUG: draw hand nodes with higgs offset
-
         vrinput::OverlapSphereManager::GetSingleton()->ShowHolsterSpheres();
         g_debugLHandDrawSphere = vrinput::OverlapSphereManager::GetSingleton()->Create(
-            g_player->GetVRNodeData()->NPCLHnd.get(), &g_higgs_palmPosHandspace, 10, &g_NPCHandPalmNormal, 0, false, true);
+            g_player->Get3D(true)->GetObjectByName("NPC L Hand [LHnd]")->AsNode(), nullptr, 10, &g_NPCHandPalmNormal, 30, false, true);
         g_debugRHandDrawSphere = vrinput::OverlapSphereManager::GetSingleton()->Create(
-            g_player->GetVRNodeData()->NPCRHnd.get(), &g_higgs_palmPosHandspace, 10, &g_NPCHandPalmNormal, 0, false, true);
-
+            g_player->Get3D(true)->GetObjectByName("NPC R Hand [RHnd]")->AsNode(), nullptr, 10, &g_NPCHandPalmNormal, 0, false, true);
     }
 
     void PreGameLoad()

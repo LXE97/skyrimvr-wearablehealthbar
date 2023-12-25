@@ -79,7 +79,7 @@ namespace vrinput
         static constexpr const char* DrawNodeInitialName = "DEBUGDRAWSPHERE";
         static constexpr const char* DrawNodeName = "Z4K_DRAWSPHERE";
         static constexpr const char* DrawNodePointerName = "Z4K_OVERLAPNORMAL";
-        static constexpr const char* DrawNewParentNode = "NPC Root [Root]"; // choice of root node is arbitrary
+        static constexpr const char* DrawParentNode = "skeleton.nif"; // needs to be attached to a visible third person node
 
         RE::BGSArtObject* DrawNodeArt;
         RE::NiColor* TURNON;

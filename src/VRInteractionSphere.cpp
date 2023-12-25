@@ -26,6 +26,8 @@ namespace vrinput
 
     void OverlapSphereManager::Update()
     {
+        static int debugcounter = 0;
+
         auto player = RE::PlayerCharacter::GetSingleton();
         if (player->Get3D(false))
         {
@@ -64,10 +66,10 @@ namespace vrinput
                         // look for initialized node
                         if (sphereVisNode = player->Get3D(false)->GetObjectByName(DrawNodeName + std::to_string(s.ID)))
                         {
-                            if (auto parentNode = player->Get3D(false)->GetObjectByName(DrawNewParentNode))
+                            if (auto parentNode = player->Get3D(false))
                             {
                                 RE::NiUpdateData ctx;
-                                sphereVisNode->local.translate = parentNode->world.rotate.Transpose() * (sphereWorld - parentNode->world.translate);
+                                sphereVisNode->local.translate = parentNode->world.Invert().rotate * (sphereWorld - parentNode->world.translate);
 
                                 if (!s.onlyHeading)
                                 { // by default, the sphere model has the same rotation as the NPC root node which has no pitch or roll
@@ -90,6 +92,7 @@ namespace vrinput
                         {
                             auto dist = sphereWorld.GetSquaredDistance(controllers[isLeft]->world.translate + controllers[isLeft]->world.rotate * palmoffset);
                             float angle = 0.0f;
+
                             if (s.normal)
                             {
                                 auto sphereNorm = helper::VectorNormalized(s.attachNode->world.rotate * *(s.normal));
@@ -206,7 +209,9 @@ namespace vrinput
             auto player = RE::PlayerCharacter::GetSingleton();
             if (player)
             {
-                player->ApplyArtObject(DrawNodeArt, -1.0F, nullptr, false, false, player->Get3D(false)->GetObjectByName(DrawNewParentNode));
+                // model takes some time to appear, so it's edited further in the main update loop
+                //player->ApplyArtObject(DrawNodeArt, -1.0F, nullptr, false, false, player->Get3D(false)->GetObjectByName(DrawParentNode));
+                player->ApplyArtObject(DrawNodeArt, -1.0F, nullptr, false, false, player->Get3D(false));
             }
         }
     }
