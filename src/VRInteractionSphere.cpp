@@ -26,12 +26,14 @@ namespace vrinput
 
     void OverlapSphereManager::Update()
     {
-        if (RE::PlayerCharacter::GetSingleton()->Get3D(false))
+        auto player = RE::PlayerCharacter::GetSingleton();
+        if (player->Get3D(false))
         {
-            controllers[1] = RE::PlayerCharacter::GetSingleton()->GetVRNodeData()->NPCLHnd;
-            controllers[0] = RE::PlayerCharacter::GetSingleton()->GetVRNodeData()->NPCRHnd;
+            controllers[1] = player->GetVRNodeData()->NPCLHnd;
+            controllers[0] = player->GetVRNodeData()->NPCRHnd;
             static int i = 1;
             static RE::NiPoint3 sphereWorld;
+
             for (auto& s : spheres)
             {
                 if (s.attachNode)
@@ -59,9 +61,10 @@ namespace vrinput
                     RE::NiAVObject* sphereVisNode = nullptr;
                     if (DrawHolsters)
                     {
-                        if (sphereVisNode = RE::PlayerCharacter::GetSingleton()->GetNodeByName(DrawNodeName + std::to_string(s.ID)))
+                        // look for initialized node
+                        if (sphereVisNode = player->Get3D(false)->GetObjectByName(DrawNodeName + std::to_string(s.ID)))
                         {
-                            if (auto parentNode = RE::PlayerCharacter::GetSingleton()->GetNodeByName(DrawNewParentNode))
+                            if (auto parentNode = player->Get3D(false)->GetObjectByName(DrawNewParentNode))
                             {
                                 RE::NiUpdateData ctx;
                                 sphereVisNode->local.translate = parentNode->world.rotate.Transpose() * (sphereWorld - parentNode->world.translate);
@@ -72,10 +75,14 @@ namespace vrinput
                                 }
                                 sphereVisNode->Update(ctx);
                             }
+                        } // look for uninitialized node and assign it to this sphere
+                        else if (sphereVisNode = player->Get3D(false)->GetObjectByName(DrawNodeInitialName))
+                        {
+                            InitializeVisible(s, sphereVisNode);
                         }
                     }
 
-                    if (!s.debugNode)
+                    if (!s.debugOnly)
                     {
                         // Test sphere collision
                         bool changed = false;
@@ -133,12 +140,12 @@ namespace vrinput
         }
     }
 
-    int32_t OverlapSphereManager::Create(RE::NiNode* attachNode, RE::NiPoint3* localPosition, float radius, RE::NiPoint3* normal, float maxAngle, bool onlyHeading, bool debugNode)
+    int32_t OverlapSphereManager::Create(RE::NiNode* attachNode, RE::NiPoint3* localPosition, float radius, RE::NiPoint3* normal, float maxAngle, bool onlyHeading, bool debugOnly)
     {
 
         if (attachNode)
         {
-            spheres.push_back(OverlapSphere(attachNode, localPosition, radius, next_ID, normal, maxAngle, onlyHeading, debugNode));
+            spheres.push_back(OverlapSphere(attachNode, localPosition, radius, next_ID, normal, maxAngle, onlyHeading, debugOnly));
             if (DrawHolsters)
             {
                 AddVisibleHolster(spheres.back());
@@ -193,83 +200,67 @@ namespace vrinput
 
     void OverlapSphereManager::AddVisibleHolster(OverlapSphere& s)
     {
-        // each sphere must be added sequentially, and it takes some ms
-        std::thread CastSpellAndEditHitArt([this, s]()
+        if (DrawNodeArt)
+        {
+            SKSE::log::trace("Adding visible node {}", s.ID);
+            auto player = RE::PlayerCharacter::GetSingleton();
+            if (player)
             {
-                std::lock_guard<std::mutex> lock(ApplyArtMutex);
-                if (DrawNodeArt)
-                {
-                    auto player = RE::PlayerCharacter::GetSingleton();
-                    if (player)
-                    {
-                        player->ApplyArtObject(DrawNodeArt, -1.0F, nullptr, false, false, player->GetNodeByName(DrawNewParentNode));
-                        RE::NiAVObject* holsterNode;
-                        int sleeps = 0;
-                        do
-                        {
-                            std::this_thread::sleep_for(5ms);
-                            holsterNode = player->GetNodeByName(DrawNodeName);
-                            SKSE::log::trace("waiting for node {}", s.ID);
-                        } while (!holsterNode && sleeps++ < 500);
-                        if (holsterNode)
-                        {
-                            std::this_thread::sleep_for(1ms);
-
-                            auto newparent = player->GetNodeByName(DrawNewParentNode);
-                            if (newparent)
-                            {
-                                newparent->AsNode()->AttachChild(holsterNode);
-                                holsterNode->local.scale = std::sqrt(s.squaredRadius);
-                                holsterNode->name = DrawNodeName + std::to_string(s.ID);
-                                if (s.debugNode)
-                                { // set to always draw
-
-                                    if (auto geometry = holsterNode->GetFirstGeometryOfShaderType(RE::BSShaderMaterial::Feature::kGlowMap))
-                                    {
-                                        auto shaderProp = geometry->GetGeometryRuntimeData().properties[RE::BSGeometry::States::kEffect].get();
-                                        if (shaderProp)
-                                        {
-                                            auto shader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProp);
-                                            if (shader)
-                                            {
-                                                shader->SetFlags(RE::BSShaderProperty::EShaderPropertyFlag8::kZBufferTest, false);
-                                            }
-                                        }
-                                    }
-                                }
-                                if (s.normal)
-                                {
-                                    if (auto normalPointer = holsterNode->GetObjectByName(DrawNodePointerName))
-                                    {   // Show the pointer and rotate to align with the desired normal vector
-                                        normalPointer->local.scale = 1.2f;
-                                        RE::NiPoint3 defaultNorm = { 1, 0, 0 };  // arbitrary but comes from the .nif
-                                        RE::NiPoint3 axis = defaultNorm.UnitCross(*(s.normal));
-
-                                        if (axis.Length() < std::numeric_limits<float>::epsilon())
-                                        {   // handle the case where the vectors are collinear...
-                                            axis = { 0, 1, 0 };
-                                        }
-                                        auto angle = std::acos(helper::DotProductSafe(defaultNorm, *(s.normal)));
-
-                                        SKSE::log::trace("rotating node normal {} by {} on axis {} {} {}", s.ID, angle, axis.x, axis.y, axis.z);
-                                        normalPointer->local.rotate = helper::getRotationAxisAngle(axis, angle);
-                                    }
-                                }
-                            }
-                        }
-
-                    }
-                } });
-
-        // technically this is not good because the mutex can be destroyed while in use if the OverlapSphereManager goes out of scope, but it's a singleton that lives as long as Skyrim.exe
-        CastSpellAndEditHitArt.detach();
+                player->ApplyArtObject(DrawNodeArt, -1.0F, nullptr, false, false, player->Get3D(false)->GetObjectByName(DrawNewParentNode));
+            }
+        }
     }
 
     void OverlapSphereManager::DestroyVisibleHolster(int32_t id)
     {
-        if (auto sphereVisNode = RE::PlayerCharacter::GetSingleton()->GetNodeByName(DrawNodeName + std::to_string(id)))
+        if (auto sphereVisNode = RE::PlayerCharacter::GetSingleton()->Get3D(false)->GetObjectByName(DrawNodeName + std::to_string(id)))
         {
             sphereVisNode->parent->DetachChild2(sphereVisNode);
+        }
+    }
+
+    void OverlapSphereManager::InitializeVisible(OverlapSphere& s, RE::NiAVObject* holsterNode)
+    {
+        auto player = RE::PlayerCharacter::GetSingleton();
+
+        if (holsterNode)
+        {
+            SKSE::log::trace("Found uninitialized node: {}", s.ID);
+            holsterNode->local.scale = std::sqrt(s.squaredRadius);
+            holsterNode->name = DrawNodeName + std::to_string(s.ID);
+            if (s.debugOnly)
+            { // set to always draw
+                if (auto geometry = holsterNode->GetFirstGeometryOfShaderType(RE::BSShaderMaterial::Feature::kGlowMap))
+                {
+                    auto shaderProp = geometry->GetGeometryRuntimeData().properties[RE::BSGeometry::States::kEffect].get();
+                    if (shaderProp)
+                    {
+                        auto shader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProp);
+                        if (shader)
+                        {
+                            shader->SetFlags(RE::BSShaderProperty::EShaderPropertyFlag8::kZBufferTest, false);
+                        }
+                    }
+                }
+            }
+            if (s.normal)
+            {
+                if (auto normalPointer = holsterNode->GetObjectByName(DrawNodePointerName))
+                {   // Show the pointer and rotate to align with the desired normal vector
+                    normalPointer->local.scale = 1.2f;
+                    RE::NiPoint3 defaultNorm = { 1, 0, 0 };  // arbitrary but comes from the .nif
+                    RE::NiPoint3 axis = defaultNorm.UnitCross(*(s.normal));
+
+                    if (axis.Length() < std::numeric_limits<float>::epsilon())
+                    {   // handle the case where the vectors are collinear...
+                        axis = { 0, 1, 0 };
+                    }
+                    auto angle = std::acos(helper::DotProductSafe(defaultNorm, *(s.normal)));
+
+                    SKSE::log::trace("rotating node normal {} by {} on axis {} {} {}", s.ID, angle, axis.x, axis.y, axis.z);
+                    normalPointer->local.rotate = helper::getRotationAxisAngle(axis, angle);
+                }
+            }
         }
     }
 

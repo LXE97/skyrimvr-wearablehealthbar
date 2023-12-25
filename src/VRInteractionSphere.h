@@ -30,7 +30,7 @@ namespace vrinput
 
         RE::NiPoint3 palmoffset;
 
-        int32_t Create(RE::NiNode* attachNode, RE::NiPoint3* localPosition, float radius, RE::NiPoint3* normal = nullptr, float maxAngle = 0, bool onlyHeading = false, bool debugNode = false);
+        int32_t Create(RE::NiNode* attachNode, RE::NiPoint3* localPosition, float radius, RE::NiPoint3* normal = nullptr, float maxAngle = 0, bool onlyHeading = false, bool debugOnly = false);
         void Destroy(int32_t targetID);
         void SetOverlapEventHandler(OverlapCallback cb);
         void ShowHolsterSpheres();
@@ -44,8 +44,8 @@ namespace vrinput
         struct OverlapSphere
         {
         public:
-            OverlapSphere(RE::NiNode* attachNode, RE::NiPoint3* localPosition, float radius, int32_t ID, RE::NiPoint3* normal = nullptr, float maxAngle = 0, bool onlyHeading = false, bool debugNode = false)
-                : attachNode(attachNode), localPosition(localPosition), squaredRadius(radius* radius), ID(ID), onlyHeading(onlyHeading), debugNode(debugNode), normal(normal), maxAngle(maxAngle) {}
+            OverlapSphere(RE::NiNode* attachNode, RE::NiPoint3* localPosition, float radius, int32_t ID, RE::NiPoint3* normal = nullptr, float maxAngle = 0, bool onlyHeading = false, bool debugOnly = false)
+                : attachNode(attachNode), localPosition(localPosition), squaredRadius(radius* radius), ID(ID), onlyHeading(onlyHeading), debugOnly(debugOnly), normal(normal), maxAngle(maxAngle) {}
 
             RE::NiNode* attachNode;
             RE::NiPoint3* localPosition;
@@ -53,12 +53,13 @@ namespace vrinput
             float maxAngle; // angle between normal and the colliding palm vector to activate
             float squaredRadius;
             bool onlyHeading; // determines whether the sphere inherits pitch and roll (only matters if localPosition is set)
-            bool debugNode;      // if true, collision is not checked and model is always visible (ignoring depth)
+            bool debugOnly;      // if true, collision is not checked and model is always visible (ignoring depth)
             int32_t ID;
             bool overlapState[2];
         };
         void AddVisibleHolster(OverlapSphere& s);
         void DestroyVisibleHolster(int32_t ID);
+        void InitializeVisible(OverlapSphere& s, RE::NiAVObject* holsterNode);
         void SetGlowColor(RE::NiAVObject* target, RE::NiColor* c);
 
         RE::NiPointer<RE::NiNode> controllers[2];
@@ -75,8 +76,8 @@ namespace vrinput
         static constexpr RE::NiPoint3 NPCHandPalmNormal = { 0, -1, 0 };
         static constexpr RE::FormID dummyArt = 0x9405f;        
         static constexpr const char* DrawNodeModelPath = "debug/InteractionSphere.nif";
-        static constexpr const char* DrawNodeParentName = "DEBUGDRAWSPHERE";
-        static constexpr const char* DrawNodeName = "Z4K_OVERLAPSPHERE";
+        static constexpr const char* DrawNodeInitialName = "DEBUGDRAWSPHERE";
+        static constexpr const char* DrawNodeName = "Z4K_DRAWSPHERE";
         static constexpr const char* DrawNodePointerName = "Z4K_OVERLAPNORMAL";
         static constexpr const char* DrawNewParentNode = "NPC Root [Root]"; // choice of root node is arbitrary
 
