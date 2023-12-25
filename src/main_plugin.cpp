@@ -37,9 +37,9 @@ namespace wearable
     // TODO config file
     vr::EVRButtonId g_config_SecondaryBtn = vr::k_EButton_A;
     vr::EVRButtonId g_config_PrimaryBtn = vr::k_EButton_SteamVR_Trigger;
-    auto h = "heyey";
-    TESForm* crap;
-    BGSArtObject* shit;
+
+    TESForm* footemp;
+    BGSArtObject* foo;
 
     bool onDEBUGBtnPressA()
     {

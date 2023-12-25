@@ -68,8 +68,6 @@ namespace vrinput
         bool DrawHolsters = false;
         int32_t next_ID = 1;
 
-        std::mutex ApplyArtMutex;
-
         // constants
         static constexpr float hysteresis = 20; // squared distance threshold before changing to off state
         static constexpr float hysteresis_angular = helper::deg2rad(3);

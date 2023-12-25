@@ -4,10 +4,12 @@ namespace vrinput
 {
     OverlapSphereManager::OverlapSphereManager()
     {
-        if (auto temp = RE::TESForm::LookupByID(dummyArt)) {
-            auto temp2 = temp->CreateDuplicateForm(false, nullptr);
-            if (temp2) {
-                DrawNodeArt = temp2->As<RE::BGSArtObject>();
+        //  generate a temporary Form to apply models to the player skeleton
+        //  this doesn't get preserved in the savefile
+        if (auto realForm = RE::TESForm::LookupByID(dummyArt)) {
+            auto temp = realForm->CreateDuplicateForm(false, nullptr);
+            if (temp) {
+                DrawNodeArt = temp->As<RE::BGSArtObject>();
                 if (DrawNodeArt)
                 {
                     DrawNodeArt->SetModel(DrawNodeModelPath);
