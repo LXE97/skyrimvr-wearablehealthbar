@@ -1,4 +1,4 @@
-#include "plugin_wearable.h"  // main source for plugin game logic
+#include "main_plugin.h"  // main source for plugin game logic
 #include <spdlog/sinks/basic_file_sink.h>
 #include "SKSE/API.h"
 #include "SKSE/Impl/Stubs.h"
@@ -141,5 +141,5 @@ void SetupLog()
     auto loggerPtr = std::make_shared<spdlog::logger>("log", std::move(fileLoggerPtr));
     spdlog::set_default_logger(std::move(loggerPtr));
     spdlog::set_level(spdlog::level::trace);
-    spdlog::flush_on(spdlog::level::info);
+    spdlog::flush_on(spdlog::level::trace);
 }

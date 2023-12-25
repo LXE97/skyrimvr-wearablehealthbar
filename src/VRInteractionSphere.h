@@ -9,6 +9,8 @@ namespace vrinput
         OverlapEvent(int32_t id, bool entered, bool isLeft) : ID(id), entered(entered), isLeft(isLeft) {}
         int32_t ID;
         bool entered;
+
+        // indicates which controller entered the sphere
         bool isLeft;
     };
 
@@ -57,7 +59,6 @@ namespace vrinput
         };
         void AddVisibleHolster(OverlapSphere& s);
         void DestroyVisibleHolster(int32_t ID);
-        void Dispel();
         void SetGlowColor(RE::NiAVObject* target, RE::NiColor* c);
 
         RE::NiPointer<RE::NiNode> controllers[2];
@@ -66,20 +67,20 @@ namespace vrinput
         bool DrawHolsters = false;
         int32_t next_ID = 1;
 
-        std::mutex CastSpellMutex;
+        std::mutex ApplyArtMutex;
 
         // constants
         static constexpr float hysteresis = 20; // squared distance threshold before changing to off state
         static constexpr float hysteresis_angular = helper::deg2rad(3);
         static constexpr RE::NiPoint3 NPCHandPalmNormal = { 0, -1, 0 };
-        static constexpr const char* DrawSphereSpellEditorName = "Z4K_HolsterDebugSphere";
-        static constexpr const char* DrawSphereMGEFEditorName = "Z4K_HolsterDebugSphereMGEF";
+        static constexpr RE::FormID dummyArt = 0x9405f;        
+        static constexpr const char* DrawNodeModelPath = "debug/InteractionSphere.nif";
+        static constexpr const char* DrawNodeParentName = "DEBUGDRAWSPHERE";
         static constexpr const char* DrawNodeName = "Z4K_OVERLAPSPHERE";
         static constexpr const char* DrawNodePointerName = "Z4K_OVERLAPNORMAL";
         static constexpr const char* DrawNewParentNode = "NPC Root [Root]"; // choice of root node is arbitrary
 
-        RE::SpellItem* DrawSphereSpell;
-        RE::EffectSetting* DrawSphereMGEF;
+        RE::BGSArtObject* DrawNodeArt;
         RE::NiColor* TURNON;
         RE::NiColor* TURNOFF;
     };
