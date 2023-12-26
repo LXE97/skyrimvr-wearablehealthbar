@@ -31,54 +31,50 @@ namespace vrinput
         auto player = RE::PlayerCharacter::GetSingleton();
         if (player->Get3D(false))
         {
-            controllers[1] = player->Get3D(true)->GetObjectByName("NPC L Hand [LHnd]")->AsNode();//player->GetVRNodeData()->NPCLHnd;
-            controllers[0] = player->Get3D(true)->GetObjectByName("NPC R Hand [RHnd]")->AsNode();//player->GetVRNodeData()->NPCRHnd;
+            controllers[1] = player->GetVRNodeData()->NPCLHnd.get();
+            controllers[0] = player->GetVRNodeData()->NPCRHnd.get();
             static int i = 1;
             static RE::NiPoint3 sphereWorld;
-
+            static int debugcount = 0;
             for (auto& s : spheres)
             {
-                if (s.attachNode)
+                if (auto sphereNode = player->Get3D(true)->GetObjectByName(s.attachNode))
                 {
-                    // Update virtual sphere position
+                    // Update virtual sphere
                     if (s.localPosition)
                     {
                         if (s.onlyHeading)
                         {
                             RE::NiPoint3 rotated = *(s.localPosition);
-                            helper::RotateZ(rotated, s.attachNode->world.rotate);
-                            sphereWorld = s.attachNode->world.translate + rotated;
+                            helper::RotateZ(rotated, sphereNode->world.rotate);
+                            sphereWorld = sphereNode->world.translate + rotated;
                         }
                         else
                         {
-                            sphereWorld = s.attachNode->world.translate + s.attachNode->world.rotate * *(s.localPosition);
+                            sphereWorld = sphereNode->world.translate + sphereNode->world.rotate * *(s.localPosition);
                         }
                     }
                     else
                     {
-                        sphereWorld = s.attachNode->world.translate;
+                        sphereWorld = sphereNode->world.translate;
                     }
 
-                    // Update visible sphere position
+                    // Update visible sphere
                     RE::NiAVObject* sphereVisNode = nullptr;
                     if (DrawHolsters)
                     {
                         // look for initialized node
                         if (sphereVisNode = player->Get3D(false)->GetObjectByName(DrawNodeName + std::to_string(s.ID)))
                         {
-                            if (auto parentNode = player->Get3D(false))
+                            if (s.onlyHeading)
                             {
                                 RE::NiUpdateData ctx;
-                                sphereVisNode->local.translate = parentNode->world.Invert().rotate * (sphereWorld - parentNode->world.translate);
-
-                                if (!s.onlyHeading)
-                                { // by default, the sphere model has the same rotation as the NPC root node which has no pitch or roll
-                                    sphereVisNode->local.rotate = parentNode->world.Invert().rotate * s.attachNode->world.rotate;
-                                }
+                                sphereVisNode->local.translate = sphereNode->world.Invert().rotate * (sphereWorld - sphereNode->world.translate);
                                 sphereVisNode->Update(ctx);
                             }
-                        } // look for uninitialized node and assign it to this sphere
-                        else if (sphereVisNode = player->Get3D(false)->GetObjectByName(DrawNodeInitialName))
+                        }
+                        // look for uninitialized node and assign it to this sphere
+                        else if (sphereVisNode = sphereNode->GetObjectByName(DrawNodeInitialName))
                         {
                             InitializeVisible(s, sphereVisNode);
                         }
@@ -88,14 +84,14 @@ namespace vrinput
                     {
                         // Test sphere collision
                         bool changed = false;
-                        for (bool isLeft : {false, true})
-                        {
+                        for (bool isLeft : {false, true}) {
+
                             auto dist = sphereWorld.GetSquaredDistance(controllers[isLeft]->world.translate + controllers[isLeft]->world.rotate * palmoffset);
                             float angle = 0.0f;
 
                             if (s.normal)
                             {
-                                auto sphereNorm = helper::VectorNormalized(s.attachNode->world.rotate * *(s.normal));
+                                auto sphereNorm = helper::VectorNormalized(sphereNode->world.rotate * *(s.normal));
                                 auto palmNorm = helper::VectorNormalized(controllers[isLeft]->world.rotate * NPCHandPalmNormal);
                                 angle = std::acos(helper::DotProductSafe(sphereNorm, palmNorm)); // both unit vectors
                             }
@@ -123,17 +119,16 @@ namespace vrinput
                                 }
                             }
                         }
+
                         // reflect both collision states in sphere color
                         if (changed && DrawHolsters && sphereVisNode)
                         {
-
                             if (s.overlapState[0] || s.overlapState[1])
                             {
-                                // set shader color to red
                                 SetGlowColor(sphereVisNode, TURNON);
                             }
                             else if (!s.overlapState[0] && !s.overlapState[1])
-                            { // set shader color back to green
+                            {
                                 SetGlowColor(sphereVisNode, TURNOFF);
                             }
                         }
@@ -143,24 +138,15 @@ namespace vrinput
         }
     }
 
-    int32_t OverlapSphereManager::Create(RE::NiNode* attachNode, RE::NiPoint3* localPosition, float radius, RE::NiPoint3* normal, float maxAngle, bool onlyHeading, bool debugOnly)
+    int32_t OverlapSphereManager::Create(const char* attachNodeName, RE::NiPoint3* localPosition, float radius, RE::NiPoint3* normal, float maxAngle, bool onlyHeading, bool debugOnly)
     {
-
-        if (attachNode)
+        spheres.push_back(OverlapSphere(attachNodeName, localPosition, radius, next_ID, normal, helper::deg2rad(maxAngle), onlyHeading, debugOnly));
+        if (DrawHolsters)
         {
-            spheres.push_back(OverlapSphere(attachNode, localPosition, radius, next_ID, normal, maxAngle, onlyHeading, debugOnly));
-            if (DrawHolsters)
-            {
-                AddVisibleHolster(spheres.back());
-            }
-            SKSE::log::debug("holster created with id {}", next_ID);
-            return next_ID++;
+            AddVisibleHolster(spheres.back());
         }
-        else
-        {
-            SKSE::log::debug("holster creation failed: {}", next_ID);
-            return -1;
-        }
+        SKSE::log::debug("holster created with id {}", next_ID);
+        return next_ID++;
     }
 
     void OverlapSphereManager::Destroy(int32_t targetID)
@@ -209,8 +195,13 @@ namespace vrinput
             if (player)
             {
                 // model takes some time to appear, so it's edited further in the main update loop
-                //player->ApplyArtObject(DrawNodeArt, -1.0F, nullptr, false, false, player->Get3D(false)->GetObjectByName(DrawParentNode));
-                player->ApplyArtObject(DrawNodeArt, -1.0F, nullptr, false, false, player->Get3D(false));
+                if (s.onlyHeading)
+                {// TODO: re-implement independent spheres
+                    player->ApplyArtObject(DrawNodeArt, -1.0F, nullptr, false, false, player->Get3D(false));
+                }
+                else {
+                    player->ApplyArtObject(DrawNodeArt, -1.0F, nullptr, false, false, player->Get3D(false)->GetObjectByName(s.attachNode));
+                }
             }
         }
     }
@@ -232,6 +223,12 @@ namespace vrinput
             SKSE::log::trace("Found uninitialized node: {}", s.ID);
             holsterNode->local.scale = std::sqrt(s.squaredRadius);
             holsterNode->name = DrawNodeName + std::to_string(s.ID);
+
+            if (s.localPosition)
+            {
+                holsterNode->local.translate = *s.localPosition;
+            }
+
             if (s.debugOnly)
             { // set to always draw
                 if (auto geometry = holsterNode->GetFirstGeometryOfShaderType(RE::BSShaderMaterial::Feature::kGlowMap))
