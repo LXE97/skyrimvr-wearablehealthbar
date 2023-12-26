@@ -5,7 +5,12 @@ namespace helper
 {
     using namespace RE;
 
-    constexpr inline float deg2rad(const float d)
+    constexpr inline float deg2radC(const float d)
+    {
+        return d * 0.01745329f;
+    }
+
+    inline float deg2rad(const float d)
     {
         return d * 0.01745329f;
     }

@@ -1,30 +1,30 @@
-#include "plugin_wearable.h"  // main source for plugin game logic
+#include "main_plugin.h"  // main source for plugin game logic
 #include <spdlog/sinks/basic_file_sink.h>
 #include "SKSE/API.h"
 #include "SKSE/Impl/Stubs.h"
 #include "higgsinterface001.h"
 #include "Windows.h"
 
-void MessageListener(SKSE::MessagingInterface::Message *message);
-void OnPapyrusVRMessage(SKSE::MessagingInterface::Message *message);
+void MessageListener(SKSE::MessagingInterface::Message* message);
+void OnPapyrusVRMessage(SKSE::MessagingInterface::Message* message);
 void SetupLog();
 uint8_t GetPluginID();
 
 // Interfaces for communicating with other SKSE plugins.
-static SKSE::detail::SKSEMessagingInterface *g_messaging;
+static SKSE::detail::SKSEMessagingInterface* g_messaging;
 static SKSE::PluginHandle g_pluginHandle = 0xFFFFFFFF;
-PapyrusVRAPI *g_papyrusvr;
+PapyrusVRAPI* g_papyrusvr;
 
 void InitializeHooking()
 {
     SKSE::log::trace("Initializing trampoline...");
-    auto &trampoline = SKSE::GetTrampoline();
+    auto& trampoline = SKSE::GetTrampoline();
     trampoline.create(14);
     SKSE::log::trace("Trampoline initialized.");
 }
 
 // Main plugin entry point.
-SKSEPluginLoad(const SKSE::LoadInterface *skse)
+SKSEPluginLoad(const SKSE::LoadInterface* skse)
 {
     SKSE::Init(skse);
     SetupLog();
@@ -32,14 +32,14 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse)
     SKSE::GetMessagingInterface()->RegisterListener(MessageListener);
 
     g_pluginHandle = skse->GetPluginHandle();
-    g_messaging = (SKSE::detail::SKSEMessagingInterface *)skse->QueryInterface(SKSE::LoadInterface::kMessaging);
-    wearable::g_task = (SKSE::detail::SKSETaskInterface *)(skse->QueryInterface(SKSE::LoadInterface::kTask));
+    g_messaging = (SKSE::detail::SKSEMessagingInterface*)skse->QueryInterface(SKSE::LoadInterface::kMessaging);
+    wearable::g_task = (SKSE::detail::SKSETaskInterface*)(skse->QueryInterface(SKSE::LoadInterface::kTask));
 
     return true;
 }
 
 // Receives messages about the game's state that SKSE broadcasts to all plugins.
-void MessageListener(SKSE::MessagingInterface::Message *message)
+void MessageListener(SKSE::MessagingInterface::Message* message)
 {
     using namespace SKSE::log;
 
@@ -60,11 +60,19 @@ void MessageListener(SKSE::MessagingInterface::Message *message)
         {
             info("Got higgs interface");
         }
+        else
+        {
+            error("Fatal error: HIGGS not found");
+        }
         info("kPostPostLoad: querying VRIK interface");
         g_vrikInterface = vrikPluginApi::getVrikInterface001(g_pluginHandle, g_messaging);
         if (g_vrikInterface)
         {
             info("Got VRIK interface");
+        }
+        else
+        {
+            error("Fatal error: VRIK not found");
         }
         break;
 
@@ -108,18 +116,18 @@ void MessageListener(SKSE::MessagingInterface::Message *message)
 }
 
 // Listener for papyrusvr Messages
-void OnPapyrusVRMessage(SKSE::MessagingInterface::Message *message)
+void OnPapyrusVRMessage(SKSE::MessagingInterface::Message* message)
 {
     if (message)
     {
         if (message->type == kPapyrusVR_Message_Init && message->data)
         {
             SKSE::log::info("SkyrimVRTools Init Message recived with valid data, registering for callback");
-            g_papyrusvr = (PapyrusVRAPI *)message->data;
+            g_papyrusvr = (PapyrusVRAPI*)message->data;
 
             wearable::g_VRManager = g_papyrusvr->GetVRManager();
             wearable::g_OVRHookManager = g_papyrusvr->GetOpenVRHook();
-            // TODO: Might not want to store these in case controller powers off during game
+
             wearable::g_l_controller = wearable::g_OVRHookManager->GetVRSystem()->GetTrackedDeviceIndexForControllerRole(vr::TrackedControllerRole_LeftHand);
             wearable::g_r_controller = wearable::g_OVRHookManager->GetVRSystem()->GetTrackedDeviceIndexForControllerRole(vr::TrackedControllerRole_RightHand);
         }
@@ -141,5 +149,5 @@ void SetupLog()
     auto loggerPtr = std::make_shared<spdlog::logger>("log", std::move(fileLoggerPtr));
     spdlog::set_default_logger(std::move(loggerPtr));
     spdlog::set_level(spdlog::level::trace);
-    spdlog::flush_on(spdlog::level::info);
+    spdlog::flush_on(spdlog::level::trace);
 }

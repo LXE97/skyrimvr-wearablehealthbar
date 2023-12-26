@@ -4,14 +4,17 @@ namespace vrinput
 {
     OverlapSphereManager::OverlapSphereManager()
     {
-        if (auto temp = helper::LookupByName(RE::FormType::Spell, DrawSphereSpellEditorName))
-        {
-            DrawSphereSpell = temp->As<RE::SpellItem>();
-        }
-
-        if (auto temp = helper::LookupByName(RE::FormType::MagicEffect, DrawSphereMGEFEditorName))
-        {
-            DrawSphereMGEF = temp->As<RE::EffectSetting>();
+        //  generate a temporary Form to apply models to the player skeleton
+        //  this doesn't get preserved in the savefile
+        if (auto realForm = RE::TESForm::LookupByID(dummyArt)) {
+            auto temp = realForm->CreateDuplicateForm(false, nullptr);
+            if (temp) {
+                DrawNodeArt = temp->As<RE::BGSArtObject>();
+                if (DrawNodeArt)
+                {
+                    DrawNodeArt->SetModel(DrawNodeModelPath);
+                }
+            }
         }
 
         TURNON = new RE::NiColor(0x16ff75);
@@ -25,73 +28,77 @@ namespace vrinput
 
     void OverlapSphereManager::Update()
     {
-        if (RE::PlayerCharacter::GetSingleton()->Get3D(true))
+        auto player = RE::PlayerCharacter::GetSingleton();
+        if (player->Get3D(false))
         {
-            controllers[1] = RE::PlayerCharacter::GetSingleton()->GetVRNodeData()->NPCLHnd;
-            controllers[0] = RE::PlayerCharacter::GetSingleton()->GetVRNodeData()->NPCRHnd;
+            controllers[1] = player->GetVRNodeData()->NPCLHnd.get();
+            controllers[0] = player->GetVRNodeData()->NPCRHnd.get();
             static int i = 1;
             static RE::NiPoint3 sphereWorld;
+            static int debugcount = 0;
             for (auto& s : spheres)
             {
-                if (s.attachNode)
+                if (auto sphereNode = player->Get3D(true)->GetObjectByName(s.attachNode))
                 {
-                    // Update virtual sphere position
+                    // Update virtual sphere
                     if (s.localPosition)
                     {
                         if (s.onlyHeading)
                         {
                             RE::NiPoint3 rotated = *(s.localPosition);
-                            helper::RotateZ(rotated, s.attachNode->world.rotate);
-                            sphereWorld = s.attachNode->world.translate + rotated;
+                            helper::RotateZ(rotated, sphereNode->world.rotate);
+                            sphereWorld = sphereNode->world.translate + rotated;
                         }
                         else
                         {
-                            sphereWorld = s.attachNode->world.translate + s.attachNode->world.rotate * *(s.localPosition);
+                            sphereWorld = sphereNode->world.translate + sphereNode->world.rotate * *(s.localPosition);
                         }
                     }
                     else
                     {
-                        sphereWorld = s.attachNode->world.translate;
+                        sphereWorld = sphereNode->world.translate;
                     }
 
-                    // Update visible sphere position
+                    // Update visible sphere
                     RE::NiAVObject* sphereVisNode = nullptr;
                     if (DrawHolsters)
                     {
-                        if (sphereVisNode = RE::PlayerCharacter::GetSingleton()->GetNodeByName(DrawNodeName + std::to_string(s.ID)))
+                        // look for initialized node
+                        if (sphereVisNode = player->Get3D(false)->GetObjectByName(DrawNodeName + std::to_string(s.ID)))
                         {
-                            if (auto parentNode = RE::PlayerCharacter::GetSingleton()->GetNodeByName(DrawNewParentNode))
+                            if (s.onlyHeading)
                             {
                                 RE::NiUpdateData ctx;
-                                sphereVisNode->local.translate = parentNode->world.rotate.Transpose() * (sphereWorld - parentNode->world.translate);
-
-                                if (!s.onlyHeading)
-                                { // by default, the sphere model has the same rotation as the NPC root node which has no pitch or roll
-                                    sphereVisNode->local.rotate = parentNode->world.rotate.Transpose() * s.attachNode->world.rotate;
-                                }
+                                sphereVisNode->local.translate = sphereNode->world.Invert().rotate * (sphereWorld - sphereNode->world.translate);
                                 sphereVisNode->Update(ctx);
                             }
                         }
+                        // look for uninitialized node and assign it to this sphere
+                        else if (sphereVisNode = sphereNode->GetObjectByName(DrawNodeInitialName))
+                        {
+                            InitializeVisible(s, sphereVisNode);
+                        }
                     }
 
-                    if (!s.debugNode)
+                    if (!s.debugOnly)
                     {
                         // Test sphere collision
                         bool changed = false;
-                        for (bool isLeft : {false, true})
-                        {
+                        for (bool isLeft : {false, true}) {
+
                             auto dist = sphereWorld.GetSquaredDistance(controllers[isLeft]->world.translate + controllers[isLeft]->world.rotate * palmoffset);
                             float angle = 0.0f;
+
                             if (s.normal)
                             {
-                                auto sphereNorm = helper::VectorNormalized(s.attachNode->world.rotate * *(s.normal));
+                                auto sphereNorm = helper::VectorNormalized(sphereNode->world.rotate * *(s.normal));
                                 auto palmNorm = helper::VectorNormalized(controllers[isLeft]->world.rotate * NPCHandPalmNormal);
                                 angle = std::acos(helper::DotProductSafe(sphereNorm, palmNorm)); // both unit vectors
                             }
 
                             if (dist <= s.squaredRadius && angle <= s.maxAngle && !s.overlapState[isLeft])
                             {
-                                SKSE::log::debug("VR Overlap event: {} hand entered sphere {}", isLeft?"left":"right", s.ID);
+                                SKSE::log::debug("VR Overlap event: {} hand entered sphere {}", isLeft ? "left" : "right", s.ID);
                                 s.overlapState[isLeft] = true;
                                 OverlapEvent e = OverlapEvent(s.ID, true, isLeft);
                                 changed = true;
@@ -102,7 +109,7 @@ namespace vrinput
                             }
                             else if ((dist > s.squaredRadius + hysteresis || angle > s.maxAngle + hysteresis_angular) && s.overlapState[isLeft])
                             {
-                                SKSE::log::debug("VR Overlap event: {} hand exited sphere {}", isLeft?"left":"right", s.ID);
+                                SKSE::log::debug("VR Overlap event: {} hand exited sphere {}", isLeft ? "left" : "right", s.ID);
                                 s.overlapState[isLeft] = false;
                                 OverlapEvent e = OverlapEvent(s.ID, false, isLeft);
                                 changed = true;
@@ -112,17 +119,16 @@ namespace vrinput
                                 }
                             }
                         }
+
                         // reflect both collision states in sphere color
                         if (changed && DrawHolsters && sphereVisNode)
                         {
-                            
                             if (s.overlapState[0] || s.overlapState[1])
                             {
-                                // set shader color to red
                                 SetGlowColor(sphereVisNode, TURNON);
                             }
                             else if (!s.overlapState[0] && !s.overlapState[1])
-                            { // set shader color back to green
+                            {
                                 SetGlowColor(sphereVisNode, TURNOFF);
                             }
                         }
@@ -132,25 +138,15 @@ namespace vrinput
         }
     }
 
-    int32_t OverlapSphereManager::Create(RE::NiNode* attachNode, RE::NiPoint3* localPosition, float radius, RE::NiPoint3* normal, float maxAngle, bool onlyHeading, bool debugNode)
+    int32_t OverlapSphereManager::Create(const char* attachNodeName, RE::NiPoint3* localPosition, float radius, RE::NiPoint3* normal, float maxAngle, bool onlyHeading, bool debugOnly)
     {
-
-        if (attachNode)
+        spheres.push_back(OverlapSphere(attachNodeName, localPosition, radius, next_ID, normal, helper::deg2rad(maxAngle), onlyHeading, debugOnly));
+        if (DrawHolsters)
         {
-            spheres.push_back(OverlapSphere(attachNode, localPosition, radius, next_ID, normal, maxAngle, onlyHeading, debugNode));
-            if (DrawHolsters)
-            {
-                AddVisibleHolster(spheres.back());
-                Dispel();
-            }
-            SKSE::log::debug("holster created with id {}", next_ID);
-            return next_ID++;
+            AddVisibleHolster(spheres.back());
         }
-        else
-        {
-            SKSE::log::debug("holster creation failed: {}", next_ID);
-            return -1;
-        }
+        SKSE::log::debug("holster created with id {}", next_ID);
+        return next_ID++;
     }
 
     void OverlapSphereManager::Destroy(int32_t targetID)
@@ -167,7 +163,6 @@ namespace vrinput
 
     void OverlapSphereManager::ShowHolsterSpheres()
     {
-        // TODO add dummy spheres to visualize the hand collision
         if (!DrawHolsters)
         {
             for (auto& s : spheres)
@@ -175,7 +170,6 @@ namespace vrinput
                 AddVisibleHolster(s);
             }
 
-            Dispel();
             DrawHolsters = true;
         }
     }
@@ -194,97 +188,80 @@ namespace vrinput
 
     void OverlapSphereManager::AddVisibleHolster(OverlapSphere& s)
     {
-        // each sphere must be added sequentially, and it takes some ms
-        std::thread CastSpellAndEditHitArt([this, s]()
+        if (DrawNodeArt)
+        {
+            SKSE::log::trace("Adding visible node {}", s.ID);
+            auto player = RE::PlayerCharacter::GetSingleton();
+            if (player)
             {
-                std::lock_guard<std::mutex> lock(CastSpellMutex);
-                if (DrawSphereSpell)
-                {
-                    auto player = RE::PlayerCharacter::GetSingleton();
-                    if (player)
-                    {
-                        auto caster = player->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant);
-                        if (caster)
-                        {
-                            caster->CastSpellImmediate(DrawSphereSpell, false, player, 1.0, false, 1.0, player);
-
-                            RE::NiAVObject* holsterNode;
-                            int sleeps = 0;
-                            do
-                            {
-                                std::this_thread::sleep_for(10ms);
-                                holsterNode = player->GetNodeByName(DrawNodeName);
-                                SKSE::log::trace("waiting for node {}", s.ID);
-                            } while (!holsterNode && sleeps++ < 100);
-                            if (holsterNode)
-                            {
-                                std::this_thread::sleep_for(20ms);
-
-                                auto newparent = player->Get3D(true)->GetObjectByName(DrawNewParentNode);
-                                if (newparent)
-                                {
-                                    newparent->AsNode()->AttachChild(holsterNode);
-                                    holsterNode->local.scale = std::sqrt(s.squaredRadius);
-                                    holsterNode->name = DrawNodeName + std::to_string(s.ID);
-                                    if (s.debugNode)
-                                    { // set to always draw
-
-                                        if (auto geometry = holsterNode->GetFirstGeometryOfShaderType(RE::BSShaderMaterial::Feature::kGlowMap))
-                                        {
-                                            auto shaderProp = geometry->GetGeometryRuntimeData().properties[RE::BSGeometry::States::kEffect].get();
-                                            if (shaderProp)
-                                            {
-                                                auto shader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProp);
-                                                if (shader)
-                                                {
-                                                    shader->SetFlags(RE::BSShaderProperty::EShaderPropertyFlag8::kZBufferTest, false);
-                                                }
-                                            }
-                                        }
-                                    }
-                                    if (s.normal)
-                                    {
-                                        if (auto normalPointer = holsterNode->GetObjectByName(DrawNodePointerName))
-                                        {   // Show the pointer and rotate to align with the desired normal vector
-                                            normalPointer->local.scale = 1.2f;
-                                            RE::NiPoint3 defaultNorm = { 1, 0, 0 };  // arbitrary but comes from the .nif
-                                            RE::NiPoint3 axis = defaultNorm.UnitCross(*(s.normal));
-
-                                            if (axis.Length() < std::numeric_limits<float>::epsilon())
-                                            {   // handle the case where the vectors are collinear...
-                                                axis = { 0, 1, 0 };
-                                            }
-                                            auto angle = std::acos(helper::DotProductSafe(defaultNorm, *(s.normal)));
-
-                                            SKSE::log::trace("rotating node normal {} by {} on axis {} {} {}", s.ID, angle, axis.x, axis.y, axis.z);
-                                            normalPointer->local.rotate = helper::getRotationAxisAngle(axis, angle);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } });
-
-        // technically this is not good because the mutex can be destroyed while in use if the OverlapSphereManager goes out of scope, but it's a singleton that lives as long as Skyrim.exe
-        CastSpellAndEditHitArt.detach();
+                // model takes some time to appear, so it's edited further in the main update loop
+                if (s.onlyHeading)
+                {// TODO: re-implement independent spheres
+                    player->ApplyArtObject(DrawNodeArt, -1.0F, nullptr, false, false, player->Get3D(false));
+                }
+                else {
+                    player->ApplyArtObject(DrawNodeArt, -1.0F, nullptr, false, false, player->Get3D(false)->GetObjectByName(s.attachNode));
+                }
+            }
+        }
     }
 
     void OverlapSphereManager::DestroyVisibleHolster(int32_t id)
     {
-        if (auto sphereVisNode = RE::PlayerCharacter::GetSingleton()->GetNodeByName(DrawNodeName + std::to_string(id)))
+        if (auto sphereVisNode = RE::PlayerCharacter::GetSingleton()->Get3D(false)->GetObjectByName(DrawNodeName + std::to_string(id)))
         {
             sphereVisNode->parent->DetachChild2(sphereVisNode);
         }
     }
 
-    void OverlapSphereManager::Dispel()
-    { // dispel the magic effect that adds holster model
-        auto pp = RE::PlayerCharacter::GetSingleton()->GetHandle();
-        if (RE::PlayerCharacter::GetSingleton()->GetMagicTarget() &&
-            RE::PlayerCharacter::GetSingleton()->GetMagicTarget()->HasMagicEffect(DrawSphereMGEF))
+    void OverlapSphereManager::InitializeVisible(OverlapSphere& s, RE::NiAVObject* holsterNode)
+    {
+        auto player = RE::PlayerCharacter::GetSingleton();
+
+        if (holsterNode)
         {
-            RE::PlayerCharacter::GetSingleton()->GetMagicTarget()->DispelEffect(DrawSphereSpell, pp);
+            SKSE::log::trace("Found uninitialized node: {}", s.ID);
+            holsterNode->local.scale = std::sqrt(s.squaredRadius);
+            holsterNode->name = DrawNodeName + std::to_string(s.ID);
+
+            if (s.localPosition)
+            {
+                holsterNode->local.translate = *s.localPosition;
+            }
+
+            if (s.debugOnly)
+            { // set to always draw
+                if (auto geometry = holsterNode->GetFirstGeometryOfShaderType(RE::BSShaderMaterial::Feature::kGlowMap))
+                {
+                    auto shaderProp = geometry->GetGeometryRuntimeData().properties[RE::BSGeometry::States::kEffect].get();
+                    if (shaderProp)
+                    {
+                        auto shader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProp);
+                        if (shader)
+                        {
+                            shader->SetFlags(RE::BSShaderProperty::EShaderPropertyFlag8::kZBufferTest, false);
+                        }
+                    }
+                }
+            }
+            if (s.normal)
+            {
+                if (auto normalPointer = holsterNode->GetObjectByName(DrawNodePointerName))
+                {   // Show the pointer and rotate to align with the desired normal vector
+                    normalPointer->local.scale = 1.2f;
+                    RE::NiPoint3 defaultNorm = { 1, 0, 0 };  // arbitrary but comes from the .nif
+                    RE::NiPoint3 axis = defaultNorm.UnitCross(*(s.normal));
+
+                    if (axis.Length() < std::numeric_limits<float>::epsilon())
+                    {   // handle the case where the vectors are collinear...
+                        axis = { 0, 1, 0 };
+                    }
+                    auto angle = std::acos(helper::DotProductSafe(defaultNorm, *(s.normal)));
+
+                    SKSE::log::trace("rotating node normal {} by {} on axis {} {} {}", s.ID, angle, axis.x, axis.y, axis.z);
+                    normalPointer->local.rotate = helper::getRotationAxisAngle(axis, angle);
+                }
+            }
         }
     }
 

@@ -1,4 +1,4 @@
-#include "plugin_wearable.h"
+#include "main_plugin.h"
 #include <cmath>
 #include <algorithm>
 
@@ -15,18 +15,11 @@ namespace wearable
     // constants
     constexpr FormID g_playerID = 0x14;
 
-    PlayerCharacter* g_player;
     SKSE::detail::SKSETaskInterface* g_task;
-    bool g_isVrikPresent;
     OpenVRHookManagerAPI* g_OVRHookManager;
     PapyrusVR::VRManagerAPI* g_VRManager;
     vr::TrackedDeviceIndex_t g_l_controller;
     vr::TrackedDeviceIndex_t g_r_controller;
-
-    TESForm* ThumbRForm;
-    TESForm* ThumbLForm;
-    TESForm* MultiRForm;
-    TESForm* MultLForm;
 
     // DEBUG
     int32_t g_debugLHandDrawSphere;
@@ -35,58 +28,28 @@ namespace wearable
     NiPoint3 g_NPCHandPalmNormal = { 0, -1, 0 };
 
     // TODO config file
-    vr::EVRButtonId g_config_SecondaryBtn = vr::k_EButton_A;
-    vr::EVRButtonId g_config_PrimaryBtn = vr::k_EButton_SteamVR_Trigger;
+    vr::EVRButtonId g_config_SecondaryBtn = vr::k_EButton_SteamVR_Trigger;
+    vr::EVRButtonId g_config_PrimaryBtn = vr::k_EButton_Grip;
 
-
-
-
+    bool onDEBUGBtnReleaseA()
+    {
+        SKSE::log::trace("A release ");
+        return false;
+    }
     bool onDEBUGBtnPressA()
     {
         SKSE::log::trace("A press ");
         if (!MenuChecker::isGameStopped())
         {
-            if (auto node = g_player->Get3D1(false)->GetObjectByName("Mara")){
-                SKSE::log::info("spell node found");
-                if (auto target = g_player->Get3D1(false)->GetObjectByName("NPC R Finger02 [RF02]")){
-                    target->AsNode()->AttachChild(node);
-                    SKSE::log::info("attched");
-                }else{
-                    SKSE::log::info("noo2");
-                }
-                
-            } else {
-                SKSE::log::info("noo");
-            }
-
         }
-        return false;
-    }
-
-    bool onDEBUGBtnReleaseB()
-    {
-        SKSE::log::trace("B release ");
-
-        //vrinput::RemoveCallback(vr::k_EButton_ApplicationMenu, onDEBUGBtnReleaseB, Right, Press, ButtonUp);
         return false;
     }
 
     bool onDEBUGBtnPressB()
     {
-        //SKSE::log::trace("B press ");
-        SKSE::log::trace("{}", Hooks::poop);
+        SKSE::log::trace("B press ");
         if (!MenuChecker::isGameStopped())
         {
-            
-            if (auto attachspell = helper::LookupByName(RE::FormType::Spell, "AttachMesh"))
-            {
-                SKSE::log::trace("spell found");
-                helper::CastSpellInstant(g_player, g_player, attachspell->As<RE::SpellItem>());
-            } else {
-                SKSE::log::trace("spel not found");
-            }
-
-            return true;
         }
         return false;
     }
@@ -94,7 +57,8 @@ namespace wearable
     void onEquipEvent(const TESEquipEvent* event)
     {
         SKSE::log::info("equip event: getting actor");
-        if (g_player && g_player == event->actor.get())
+        auto player = PlayerCharacter::GetSingleton();
+        if (player && player == event->actor.get())
         {
             SKSE::log::info("equip event: looking up formid");
             auto item = TESForm::LookupByID(event->baseObject);
@@ -105,8 +69,18 @@ namespace wearable
     {
     }
 
+    void Update() {
+        auto player = RE::PlayerCharacter::GetSingleton();
+        if (player)
+        {
+            vrinput::OverlapSphereManager::GetSingleton()->Update();
+        }
+    }
+
     void StartMod()
     {
+        MenuChecker::begin();
+
         Hooks::Install();
 
         // VR init
@@ -114,14 +88,13 @@ namespace wearable
         g_r_controller = g_OVRHookManager->GetVRSystem()->GetTrackedDeviceIndexForControllerRole(vr::TrackedControllerRole_RightHand);
         RegisterVRInputCallback();
 
-        MenuChecker::begin();
-
         // HIGGS setup
         if (g_higgsInterface)
         {
             // TODO: read this from config
             g_higgs_palmPosHandspace = { 0, -2.4, 6 };
             vrinput::OverlapSphereManager::GetSingleton()->palmoffset = g_higgs_palmPosHandspace;
+            g_higgsInterface->AddPostVrikPostHiggsCallback(&Update);
         }
 
         // register event sinks and handlers
@@ -130,21 +103,20 @@ namespace wearable
         equipSink->AddCallback(onEquipEvent);
 
         vrinput::AddCallback(vr::k_EButton_A, onDEBUGBtnPressA, Right, Press, ButtonDown);
+        vrinput::AddCallback(vr::k_EButton_A, onDEBUGBtnReleaseA, Right, Press, ButtonUp);
         vrinput::AddCallback(vr::k_EButton_ApplicationMenu, onDEBUGBtnPressB, Right, Press, ButtonDown);
     }
 
     void GameLoad()
     {
-        g_player = RE::PlayerCharacter::GetSingleton();
+        auto player = RE::PlayerCharacter::GetSingleton();
 
         // DEBUG: draw hand nodes with higgs offset
-        /*
         vrinput::OverlapSphereManager::GetSingleton()->ShowHolsterSpheres();
         g_debugLHandDrawSphere = vrinput::OverlapSphereManager::GetSingleton()->Create(
-            g_player->GetVRNodeData()->NPCLHnd.get(), &g_higgs_palmPosHandspace, 1, &g_NPCHandPalmNormal, 0, false, true);
+            "NPC L Hand [LHnd]", &g_higgs_palmPosHandspace, 10, &g_NPCHandPalmNormal, 90, false, false);
         g_debugRHandDrawSphere = vrinput::OverlapSphereManager::GetSingleton()->Create(
-            g_player->GetVRNodeData()->NPCRHnd.get(), &g_higgs_palmPosHandspace, 1, &g_NPCHandPalmNormal, 0, false, true);
-            */
+            "NPC R Hand [RHnd]", &g_higgs_palmPosHandspace, 1, &g_NPCHandPalmNormal, 0, false, true);
     }
 
     void PreGameLoad()
@@ -205,8 +177,7 @@ namespace wearable
             if (g_OVRHookManager)
             {
                 SKSE::log::info("Successfully requested OpenVRHookManagerAPI.");
-                // InitSystem(g_OVRHookManager->GetVRSystem()); required for haptic triggers, set up later
-
+                // TODO: set up haptics: InitSystem(g_OVRHookManager->GetVRSystem()); 
                 g_OVRHookManager->RegisterControllerStateCB(ControllerInput_CB);
             }
         }

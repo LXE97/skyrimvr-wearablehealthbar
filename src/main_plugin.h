@@ -26,7 +26,7 @@ namespace wearable
     void PreGameLoad();
 
     bool onDEBUGBtnPressA();
-    bool onDEBUGBtnReleaseB();
+    bool onDEBUGBtnReleaseA();
     bool onDEBUGBtnPressB();
     void onEquipEvent(const RE::TESEquipEvent* event);
     void onOverlap(const vrinput::OverlapEvent& e);

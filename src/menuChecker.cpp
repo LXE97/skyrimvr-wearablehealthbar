@@ -10,7 +10,7 @@ namespace MenuChecker
         return isGameStoppedState;
     }
 
-    bool _isGameStopped()
+    bool updateGameStopped()
     {
         for (auto menu : gameStoppingMenus)
         {
@@ -41,7 +41,7 @@ namespace MenuChecker
             }
         }
 
-        isGameStoppedState = _isGameStopped();
+        isGameStoppedState = updateGameStopped();
     }
 
     void begin()
