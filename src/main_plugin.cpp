@@ -46,7 +46,17 @@ namespace wearable
         SKSE::log::trace("A press ");
         if (!MenuChecker::isGameStopped())
         {
+            auto player = PlayerCharacter::GetSingleton();
+            auto controller = player->GetVRNodeData()->NPCLHnd.get()->world.translate;
+            auto bobhand = player->GetVRNodeData()->LeftWandNode.get()->world.translate;
+            auto room = player->GetVRNodeData()->RoomNode.get()->world.translate;
 
+            SKSE::log::debug("bobhand: {} {} {}",
+                bobhand.x, bobhand.y, bobhand.z);
+            SKSE::log::debug("contr: {} {} {}",
+                controller.x, controller.y, controller.z);
+            SKSE::log::debug("room: {} {} {}",
+                room.x, room.y, room.z);
             /*
             auto* data = RE::TESDataHandler::GetSingleton();
 
@@ -97,34 +107,46 @@ namespace wearable
 
     static int debugcounter = 0;
     void Update() {
+        auto player = RE::PlayerCharacter::GetSingleton();
+        if (player)
+        {
+            vrinput::OverlapSphereManager::GetSingleton()->Update();
+            auto gg = player->Get3D(false)->GetObjectByName("amuletattach");
+            if (gg)
+            {
+                auto wand = player->Get3D(false)->GetObjectByName("NPC R Finger10 [RF10]");
+                if (wand)
+                {
+                    auto ctx = new NiUpdateData();
+                    gg->local.translate = gg->parent->world.Invert().rotate * (wand->world.translate - gg->parent->world.translate);
+                    gg->Update(*ctx);
+                }
+            }
+            if (0 && debugcounter++ % 200 == 0) {
 
-        vrinput::OverlapSphereManager::GetSingleton()->Update();
-
-        if (1 && debugcounter++ % 200 == 0) {
-
-            RE::NiNode* aa = g_player->Get3D(false)->GetObjectByName("Camera Control")->AsNode();
-            RE::NiNode* bb = g_player->GetVRNodeData()->UprightHmdNode.get();
+                RE::NiNode* aa = player->Get3D(false)->GetObjectByName("Camera Control")->AsNode();
+                RE::NiNode* bb = player->GetVRNodeData()->UprightHmdNode.get();
 
 
-            SKSE::log::debug("post a: {} {} {}",
-                aa->world.translate.x, aa->world.translate.y, aa->world.translate.z);
+                SKSE::log::debug("post a: {} {} {}",
+                    aa->world.translate.x, aa->world.translate.y, aa->world.translate.z);
 
-            SKSE::log::debug("post b: {} {} {}",
-                bb->world.translate.x, bb->world.translate.y, bb->world.translate.z);
-
+                SKSE::log::debug("post b: {} {} {}",
+                    bb->world.translate.x, bb->world.translate.y, bb->world.translate.z);
+            }
         }
     }
 
     void StartMod()
     {
+        MenuChecker::begin();
+
         Hooks::Install();
 
         // VR init
         g_l_controller = g_OVRHookManager->GetVRSystem()->GetTrackedDeviceIndexForControllerRole(vr::TrackedControllerRole_LeftHand);
         g_r_controller = g_OVRHookManager->GetVRSystem()->GetTrackedDeviceIndexForControllerRole(vr::TrackedControllerRole_RightHand);
         RegisterVRInputCallback();
-
-        MenuChecker::begin();
 
         // HIGGS setup
         if (g_higgsInterface)
@@ -146,14 +168,14 @@ namespace wearable
 
     void GameLoad()
     {
-        g_player = RE::PlayerCharacter::GetSingleton();
+        auto player = RE::PlayerCharacter::GetSingleton();
 
         // DEBUG: draw hand nodes with higgs offset
         vrinput::OverlapSphereManager::GetSingleton()->ShowHolsterSpheres();
         g_debugLHandDrawSphere = vrinput::OverlapSphereManager::GetSingleton()->Create(
-            g_player->Get3D(true)->GetObjectByName("NPC L Hand [LHnd]")->AsNode(), nullptr, 10, &g_NPCHandPalmNormal, 30, false, true);
+            player->Get3D(true)->GetObjectByName("NPC L Hand [LHnd]")->AsNode(), &g_higgs_palmPosHandspace, 10, &g_NPCHandPalmNormal, 30, false, false);
         g_debugRHandDrawSphere = vrinput::OverlapSphereManager::GetSingleton()->Create(
-            g_player->Get3D(true)->GetObjectByName("NPC R Hand [RHnd]")->AsNode(), nullptr, 10, &g_NPCHandPalmNormal, 0, false, true);
+            player->Get3D(true)->GetObjectByName("NPC R Hand [RHnd]")->AsNode(), &g_higgs_palmPosHandspace, 10, &g_NPCHandPalmNormal, 0, false, true);
     }
 
     void PreGameLoad()

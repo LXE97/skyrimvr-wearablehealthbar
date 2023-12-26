@@ -62,7 +62,7 @@ namespace vrinput
         void InitializeVisible(OverlapSphere& s, RE::NiAVObject* holsterNode);
         void SetGlowColor(RE::NiAVObject* target, RE::NiColor* c);
 
-        RE::NiPointer<RE::NiNode> controllers[2];
+        RE::NiNode* controllers[2];
         std::vector<OverlapSphere> spheres;
         OverlapCallback _cb;
         bool DrawHolsters = false;

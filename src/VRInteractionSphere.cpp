@@ -28,13 +28,11 @@ namespace vrinput
 
     void OverlapSphereManager::Update()
     {
-        static int debugcounter = 0;
-
         auto player = RE::PlayerCharacter::GetSingleton();
         if (player->Get3D(false))
         {
-            controllers[1] = player->GetVRNodeData()->NPCLHnd;
-            controllers[0] = player->GetVRNodeData()->NPCRHnd;
+            controllers[1] = player->Get3D(true)->GetObjectByName("NPC L Hand [LHnd]")->AsNode();//player->GetVRNodeData()->NPCLHnd;
+            controllers[0] = player->Get3D(true)->GetObjectByName("NPC R Hand [RHnd]")->AsNode();//player->GetVRNodeData()->NPCRHnd;
             static int i = 1;
             static RE::NiPoint3 sphereWorld;
 
@@ -75,7 +73,7 @@ namespace vrinput
 
                                 if (!s.onlyHeading)
                                 { // by default, the sphere model has the same rotation as the NPC root node which has no pitch or roll
-                                    sphereVisNode->local.rotate = parentNode->world.rotate.Transpose() * s.attachNode->world.rotate;
+                                    sphereVisNode->local.rotate = parentNode->world.Invert().rotate * s.attachNode->world.rotate;
                                 }
                                 sphereVisNode->Update(ctx);
                             }
@@ -179,7 +177,6 @@ namespace vrinput
 
     void OverlapSphereManager::ShowHolsterSpheres()
     {
-
         if (!DrawHolsters)
         {
             for (auto& s : spheres)
