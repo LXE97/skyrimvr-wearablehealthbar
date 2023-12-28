@@ -1,7 +1,7 @@
 
 namespace hooks
 {
-    static float g_detection_level = 2;
+    static float g_detection_level = -1.0f;
     // hook from Doodlum/Contextual Crosshair
     struct StealthMeter_Update
     {

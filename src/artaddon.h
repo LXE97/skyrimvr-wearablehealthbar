@@ -2,8 +2,6 @@
  * It uses temporary BGSArtObject forms that are recycled on exit to main menu or desktop.
  * From my testing it's safe to create 0x400000 of these forms before the game hangs, but we'll
  * cache them anyway for repeated use of the same model.
- * To prevent orphaned NiObjects from getting stuck on the player, all the models added this way
- * are automatically deleted pre-savegame event and then re-applied.
  */
 #pragma once
 
@@ -12,7 +10,7 @@ namespace helper
     using namespace RE;
 
     /** The user has ownership of the virtual art object, but the manager automates the initialization and maintenance
-     * of the corresponding 3D objects. This class represents a request to the manager to create the 3D and
+     * of the corresponding 3D objects. This class represents a request to the manager to create the 3D model and
      * a storage for tracking its state.
      */
     class ArtAddon
@@ -67,6 +65,9 @@ namespace helper
         ArtAddonManager& operator=(ArtAddonManager&&) = delete;
 
         BGSArtObject* GetArtForm(const char* modelPath);
+        void addChild(ArtAddon* a);
+        void removeChild(ArtAddon* a);
+
 
         BGSArtObject* baseAO;
         std::unordered_map<const char*, BGSArtObject*> AOcache;
@@ -76,7 +77,7 @@ namespace helper
 
         // to handle the case that an ArtAddon is destroyed before its 3D data is instantiated
         struct toCancel {
-            toCancel(BGSArtObject* a, TESObjectREFR* t) : a(a), t(t){}
+            toCancel(BGSArtObject* a, TESObjectREFR* t) : a(a), t(t) {}
             BGSArtObject* a;
             TESObjectREFR* t;
         };

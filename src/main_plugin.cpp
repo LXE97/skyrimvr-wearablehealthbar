@@ -27,12 +27,10 @@ namespace wearable
     NiPoint3 g_higgs_palmPosHandspace;
     NiPoint3 g_NPCHandPalmNormal = { 0, -1, 0 };
     helper::ArtAddon* gg;
+
     // TODO config file
     vr::EVRButtonId g_config_SecondaryBtn = vr::k_EButton_SteamVR_Trigger;
     vr::EVRButtonId g_config_PrimaryBtn = vr::k_EButton_Grip;
-
-    BGSArtObject* testa;
-    ModelReferenceEffect poopa;
 
     bool onDEBUGBtnReleaseA()
     {
@@ -47,16 +45,7 @@ namespace wearable
         {
             if (const auto processLists = RE::ProcessLists::GetSingleton()) {
                 processLists->ForEachModelEffect([&](RE::ModelReferenceEffect& a_modelEffect) {
-
                     SKSE::log::trace("model effect addr: {} AO: {}", (void*)&a_modelEffect, (void*)(a_modelEffect.artObject));
-                    if (a_modelEffect.target.get()->AsReference() == PlayerCharacter::GetSingleton()->AsReference()) {
-                        //auto node = a_modelEffect.Get3D();
-                        //auto newparent = PlayerCharacter::GetSingleton()->Get3D(false)->GetObjectByName("AnimObjectL");
-                        //newparent->AsNode()->AttachChild(node);
-
-                    }
-
-
                     return RE::BSContainer::ForEachResult::kContinue;
                     });
             }
@@ -69,12 +58,11 @@ namespace wearable
         SKSE::log::trace("B press ");
         if (!menuchecker::isGameStopped())
         {
-            if (auto temp = TESForm::LookupByID(0x9405f))
-            {
-                auto test = temp->CreateDuplicateForm(false, nullptr)->As<BGSArtObject>();
-                test->SetModel("debug/debugsphere.nif");
-                PlayerCharacter::GetSingleton()->ApplyArtObject(test);
-            }
+            auto player = PlayerCharacter::GetSingleton();
+
+            NiTransform g;
+            g.translate = g_higgs_palmPosHandspace;
+            gg = new helper::ArtAddon("debug/debugsphere.nif", player->AsReference(), player->Get3D(false)->GetObjectByName("NPC L Hand [LHnd]"), g);
         }
         return false;
     }
@@ -96,8 +84,7 @@ namespace wearable
 
     void Update()
     {
-        vrinput::OverlapSphereManager::GetSingleton()->Update();
-        //helper::ArtAddonManager::GetSingleton()->Update();
+        helper::ArtAddonManager::GetSingleton()->Update();
     }
 
     void StartMod()
@@ -116,8 +103,8 @@ namespace wearable
         {
             // TODO: read this from config
             g_higgs_palmPosHandspace = { 0, -2.4, 6 };
-            //vrinput::OverlapSphereManager::GetSingleton()->palmoffset = g_higgs_palmPosHandspace;
-            //g_higgsInterface->AddPostVrikPostHiggsCallback(&Update);
+            vrinput::OverlapSphereManager::GetSingleton()->SetPalmOffset(g_higgs_palmPosHandspace);
+            g_higgsInterface->AddPostVrikPostHiggsCallback(&Update);
         }
 
         // register event sinks and handlers
@@ -134,24 +121,16 @@ namespace wearable
     void GameLoad()
     {
         auto player = RE::PlayerCharacter::GetSingleton();
-        vrinput::OverlapSphereManager::GetSingleton()->GameLoaded();
-
-
-        // DEBUG: draw hand nodes with higgs offset
-        vrinput::OverlapSphereManager::GetSingleton()->ShowHolsterSpheres();
-        NiTransform g;
-        //gg = new helper::ArtAddon("debug/debugsphere.nif", player->AsReference(), player->Get3D(false)->GetObjectByName("AnimObjectR"), g);
-        //g_debugRHandDrawSphere = vrinput::OverlapSphereManager::GetSingleton()->Create(
-         //   "NPC R Hand [RHnd]", &g_higgs_palmPosHandspace, 1, &g_NPCHandPalmNormal, 0, false, true);
     }
 
     void PreGameLoad()
     {
+
     }
 
     void GameSave()
     {
-        //helper::ArtAddonManager::GetSingleton()->PreSaveGame();
+        helper::ArtAddonManager::GetSingleton()->PreSaveGame();
     }
 
     // handles low level button/trigger events
