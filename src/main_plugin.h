@@ -11,6 +11,7 @@
 
 #include "mod_input.h"
 #include "mod_eventSink.hpp"
+#include "artaddon.h"
 #include "wearable.h"
 
 namespace wearable
@@ -23,6 +24,7 @@ namespace wearable
 
     void StartMod();
     void GameLoad();
+    void GameSave();
     void PreGameLoad();
 
     bool onDEBUGBtnPressA();

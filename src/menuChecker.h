@@ -3,7 +3,7 @@
 
 #include <unordered_map>
 
-namespace MenuChecker
+namespace menuchecker
 {
     extern std::vector<std::string> gameStoppingMenus;
 

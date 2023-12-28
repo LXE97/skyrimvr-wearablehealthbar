@@ -33,8 +33,11 @@ public:
 
 private:
     EventSink() = default;
+    ~EventSink() = default;
     EventSink(const EventSink&) = delete;
+    EventSink(EventSink&&) = delete;
     EventSink& operator=(const EventSink&) = delete;
+    EventSink& operator=(EventSink&&) = delete;
 
     std::mutex callbackLock;
     std::vector<EventCallback<T>> callbacks;

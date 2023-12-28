@@ -1,4 +1,5 @@
 #pragma once
+#include "Windows.h"
 
 namespace helper
 {
@@ -18,4 +19,15 @@ namespace helper
     void SetSpecularMult();
     void SetSpecularColor();
     void SetTintColor();
+
+    inline double GetQPC() noexcept
+    {
+        LARGE_INTEGER f, i;
+        if (QueryPerformanceCounter(&i) && QueryPerformanceFrequency(&f))
+        {
+            auto frequency = 1.0 / static_cast<double>(f.QuadPart);
+            return static_cast<double>(i.QuadPart) * frequency;
+        }
+        return 0.0;
+    }
 }

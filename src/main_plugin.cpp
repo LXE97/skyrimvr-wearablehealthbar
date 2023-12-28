@@ -2,7 +2,7 @@
 #include <cmath>
 #include <algorithm>
 
-#include "menuChecker.h"
+#include "menuchecker.h"
 #include "helper_math.h"
 #include "helper_game.h"
 #include "Hooks.hpp"
@@ -26,6 +26,7 @@ namespace wearable
     int32_t g_debugRHandDrawSphere;
     NiPoint3 g_higgs_palmPosHandspace;
     NiPoint3 g_NPCHandPalmNormal = { 0, -1, 0 };
+    helper::ArtAddon* gg;
 
     // TODO config file
     vr::EVRButtonId g_config_SecondaryBtn = vr::k_EButton_SteamVR_Trigger;
@@ -34,13 +35,20 @@ namespace wearable
     bool onDEBUGBtnReleaseA()
     {
         SKSE::log::trace("A release ");
+
         return false;
     }
     bool onDEBUGBtnPressA()
     {
         SKSE::log::trace("A press ");
-        if (!MenuChecker::isGameStopped())
+        if (!menuchecker::isGameStopped())
         {
+            if (const auto processLists = RE::ProcessLists::GetSingleton()) {
+                processLists->ForEachModelEffect([&](RE::ModelReferenceEffect& a_modelEffect) {
+                    SKSE::log::trace("model effect addr: {} AO: {}", (void*)&a_modelEffect, (void*)(a_modelEffect.artObject));
+                    return RE::BSContainer::ForEachResult::kContinue;
+                    });
+            }
         }
         return false;
     }
@@ -48,8 +56,13 @@ namespace wearable
     bool onDEBUGBtnPressB()
     {
         SKSE::log::trace("B press ");
-        if (!MenuChecker::isGameStopped())
+        if (!menuchecker::isGameStopped())
         {
+            auto player = PlayerCharacter::GetSingleton();
+
+            NiTransform g;
+            g.translate = g_higgs_palmPosHandspace;
+            gg = new helper::ArtAddon("debug/debugsphere.nif", player->AsReference(), player->Get3D(false)->GetObjectByName("NPC L Hand [LHnd]"), g);
         }
         return false;
     }
@@ -69,19 +82,16 @@ namespace wearable
     {
     }
 
-    void Update() {
-        auto player = RE::PlayerCharacter::GetSingleton();
-        if (player)
-        {
-            vrinput::OverlapSphereManager::GetSingleton()->Update();
-        }
+    void Update()
+    {
+        helper::ArtAddonManager::GetSingleton()->Update();
     }
 
     void StartMod()
     {
-        MenuChecker::begin();
+        menuchecker::begin();
 
-        Hooks::Install();
+        hooks::Install();
 
         // VR init
         g_l_controller = g_OVRHookManager->GetVRSystem()->GetTrackedDeviceIndexForControllerRole(vr::TrackedControllerRole_LeftHand);
@@ -93,7 +103,7 @@ namespace wearable
         {
             // TODO: read this from config
             g_higgs_palmPosHandspace = { 0, -2.4, 6 };
-            vrinput::OverlapSphereManager::GetSingleton()->palmoffset = g_higgs_palmPosHandspace;
+            vrinput::OverlapSphereManager::GetSingleton()->SetPalmOffset(g_higgs_palmPosHandspace);
             g_higgsInterface->AddPostVrikPostHiggsCallback(&Update);
         }
 
@@ -107,22 +117,20 @@ namespace wearable
         vrinput::AddCallback(vr::k_EButton_ApplicationMenu, onDEBUGBtnPressB, Right, Press, ButtonDown);
     }
 
+
     void GameLoad()
     {
         auto player = RE::PlayerCharacter::GetSingleton();
-
-        // DEBUG: draw hand nodes with higgs offset
-        vrinput::OverlapSphereManager::GetSingleton()->ShowHolsterSpheres();
-        g_debugLHandDrawSphere = vrinput::OverlapSphereManager::GetSingleton()->Create(
-            "NPC L Hand [LHnd]", &g_higgs_palmPosHandspace, 10, &g_NPCHandPalmNormal, 90, false, false);
-        g_debugRHandDrawSphere = vrinput::OverlapSphereManager::GetSingleton()->Create(
-            "NPC R Hand [RHnd]", &g_higgs_palmPosHandspace, 1, &g_NPCHandPalmNormal, 0, false, true);
     }
 
     void PreGameLoad()
     {
-        vrinput::OverlapSphereManager::GetSingleton()->Destroy(g_debugLHandDrawSphere);
-        vrinput::OverlapSphereManager::GetSingleton()->Destroy(g_debugRHandDrawSphere);
+
+    }
+
+    void GameSave()
+    {
+        helper::ArtAddonManager::GetSingleton()->PreSaveGame();
     }
 
     // handles low level button/trigger events
@@ -136,7 +144,7 @@ namespace wearable
         static uint64_t prev_Pressed_out[2] = {};
         static uint64_t prev_Touched_out[2] = {};
 
-        if (pControllerState && !MenuChecker::isGameStopped())
+        if (pControllerState && !menuchecker::isGameStopped())
         {
             bool isLeft = unControllerDeviceIndex == g_l_controller;
             if (isLeft || unControllerDeviceIndex == g_r_controller)

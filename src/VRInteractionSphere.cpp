@@ -7,13 +7,13 @@ namespace vrinput
         //  generate a temporary Form to apply models to the player skeleton
         //  this doesn't get preserved in the savefile
         if (auto realForm = RE::TESForm::LookupByID(dummyArt)) {
-            auto temp = realForm->CreateDuplicateForm(false, nullptr);
-            if (temp) {
+            if (auto temp = realForm->CreateDuplicateForm(false, nullptr)) {
                 DrawNodeArt = temp->As<RE::BGSArtObject>();
                 if (DrawNodeArt)
                 {
                     DrawNodeArt->SetModel(DrawNodeModelPath);
                 }
+                SKSE::log::debug("BGSArtObject created with formID: {:X}", temp->GetFormID());
             }
         }
 
@@ -138,6 +138,10 @@ namespace vrinput
         }
     }
 
+    void OverlapSphereManager::SetPalmOffset(RE::NiPoint3& offset) {
+        palmoffset = offset;
+    }
+
     int32_t OverlapSphereManager::Create(const char* attachNodeName, RE::NiPoint3* localPosition, float radius, RE::NiPoint3* normal, float maxAngle, bool onlyHeading, bool debugOnly)
     {
         spheres.push_back(OverlapSphere(attachNodeName, localPosition, radius, next_ID, normal, helper::deg2rad(maxAngle), onlyHeading, debugOnly));
@@ -208,9 +212,32 @@ namespace vrinput
 
     void OverlapSphereManager::DestroyVisibleHolster(int32_t id)
     {
-        if (auto sphereVisNode = RE::PlayerCharacter::GetSingleton()->Get3D(false)->GetObjectByName(DrawNodeName + std::to_string(id)))
+        if (const auto processLists = RE::ProcessLists::GetSingleton())
         {
-            sphereVisNode->parent->DetachChild2(sphereVisNode);
+            processLists->ForEachModelEffect([&](RE::ModelReferenceEffect& a_modelEffect)
+                {
+                    if (a_modelEffect.target.get()->AsReference() == RE::PlayerCharacter::GetSingleton()->AsReference())
+                    {
+                        if (auto model = a_modelEffect.Get3D())
+                        {
+                            if (auto sdata = model->GetExtraData("source"))
+                            {
+                                auto s = static_cast<RE::NiStringExtraData*>(sdata);
+                                if (std::strcmp(s->value, pluginName)) {
+                                    if (auto idata = model->GetExtraData("id"))
+                                    {
+                                        auto i = static_cast<RE::NiIntegerExtraData*>(idata);
+                                        if (i->value == id) {
+                                            a_modelEffect.Detach();
+                                        }
+                                    }
+                                }
+                            }
+
+                        }
+                    }
+                    return RE::BSContainer::ForEachResult::kContinue;
+                });
         }
     }
 
@@ -223,14 +250,16 @@ namespace vrinput
             SKSE::log::trace("Found uninitialized node: {}", s.ID);
             holsterNode->local.scale = std::sqrt(s.squaredRadius);
             holsterNode->name = DrawNodeName + std::to_string(s.ID);
+            auto exString = static_cast<RE::NiStringExtraData*>(holsterNode->GetExtraData("type"));
+            exString->value = new char[]("InteractionSphere");
 
             if (s.localPosition)
             {
                 holsterNode->local.translate = *s.localPosition;
             }
 
-            if (s.debugOnly)
-            { // set to always draw
+            if (!s.debugOnly)
+            { // disable always-draw
                 if (auto geometry = holsterNode->GetFirstGeometryOfShaderType(RE::BSShaderMaterial::Feature::kGlowMap))
                 {
                     auto shaderProp = geometry->GetGeometryRuntimeData().properties[RE::BSGeometry::States::kEffect].get();
@@ -239,7 +268,7 @@ namespace vrinput
                         auto shader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProp);
                         if (shader)
                         {
-                            shader->SetFlags(RE::BSShaderProperty::EShaderPropertyFlag8::kZBufferTest, false);
+                            shader->SetFlags(RE::BSShaderProperty::EShaderPropertyFlag8::kZBufferTest, true);
                         }
                     }
                 }
@@ -280,5 +309,14 @@ namespace vrinput
                 }
             }
         }
+    }
+
+    void OverlapSphereManager::GameLoaded()
+    {
+        for (auto& s : spheres) {
+            Destroy(s.ID);
+        }
+
+       
     }
 }
