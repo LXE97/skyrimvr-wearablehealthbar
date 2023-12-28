@@ -1,5 +1,5 @@
 
-namespace Hooks
+namespace hooks
 {
     static float g_detection_level = 2;
     // hook from Doodlum/Contextual Crosshair

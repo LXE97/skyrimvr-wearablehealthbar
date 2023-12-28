@@ -1,6 +1,7 @@
 #include "wearable.h"
 
-namespace wearable {
+namespace wearable
+{
 
 
 

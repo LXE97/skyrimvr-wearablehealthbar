@@ -14,6 +14,7 @@ uint8_t GetPluginID();
 static SKSE::detail::SKSEMessagingInterface* g_messaging;
 static SKSE::PluginHandle g_pluginHandle = 0xFFFFFFFF;
 PapyrusVRAPI* g_papyrusvr;
+bool g_pluginError = false;
 
 void InitializeHooking()
 {
@@ -54,7 +55,6 @@ void MessageListener(SKSE::MessagingInterface::Message* message)
 
     case SKSE::MessagingInterface::kPostPostLoad:
         info("kPostPostLoad: querying higgs interface");
-
         g_higgsInterface = HiggsPluginAPI::GetHiggsInterface001(g_pluginHandle, g_messaging);
         if (g_higgsInterface)
         {
@@ -62,8 +62,10 @@ void MessageListener(SKSE::MessagingInterface::Message* message)
         }
         else
         {
-            error("Fatal error: HIGGS not found");
+            critical("Plugin disabled: HIGGS interface not found");
+            g_pluginError = true;
         }
+
         info("kPostPostLoad: querying VRIK interface");
         g_vrikInterface = vrikPluginApi::getVrikInterface001(g_pluginHandle, g_messaging);
         if (g_vrikInterface)
@@ -72,8 +74,10 @@ void MessageListener(SKSE::MessagingInterface::Message* message)
         }
         else
         {
-            error("Fatal error: VRIK not found");
+            critical("Plugin disabled: VRIK interface not found");
+            g_pluginError = true;
         }
+
         break;
 
     case SKSE::MessagingInterface::kInputLoaded:
@@ -84,21 +88,22 @@ void MessageListener(SKSE::MessagingInterface::Message* message)
         trace("kDataLoaded: sent after the data handler has loaded all its forms");
         InitializeHooking();
         // Initialize our mod.
-        wearable::StartMod();
+        if (!g_pluginError) wearable::StartMod();
         break;
 
     case SKSE::MessagingInterface::kPreLoadGame:
         trace("kPreLoadGame: sent immediately before savegame is read");
-        wearable::PreGameLoad();
+        if (!g_pluginError) wearable::PreGameLoad();
         break;
 
     case SKSE::MessagingInterface::kPostLoadGame:
         trace("kPostLoadGame: sent after an attempt to load a saved game has finished");
-        wearable::GameLoad();
+        if (!g_pluginError) wearable::GameLoad();
         break;
 
     case SKSE::MessagingInterface::kSaveGame:
         trace("kSaveGame");
+        if (!g_pluginError) wearable::GameSave();
         break;
 
     case SKSE::MessagingInterface::kDeleteGame:
@@ -127,9 +132,6 @@ void OnPapyrusVRMessage(SKSE::MessagingInterface::Message* message)
 
             wearable::g_VRManager = g_papyrusvr->GetVRManager();
             wearable::g_OVRHookManager = g_papyrusvr->GetOpenVRHook();
-
-            wearable::g_l_controller = wearable::g_OVRHookManager->GetVRSystem()->GetTrackedDeviceIndexForControllerRole(vr::TrackedControllerRole_LeftHand);
-            wearable::g_r_controller = wearable::g_OVRHookManager->GetVRSystem()->GetTrackedDeviceIndexForControllerRole(vr::TrackedControllerRole_RightHand);
         }
     }
 }

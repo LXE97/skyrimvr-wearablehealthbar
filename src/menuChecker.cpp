@@ -1,7 +1,7 @@
-#include "menuChecker.h"
+#include "menuchecker.h"
 #include "mod_eventSink.hpp"
 
-namespace MenuChecker
+namespace menuchecker
 {
     bool isGameStoppedState = true;
 
