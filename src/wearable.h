@@ -1,7 +1,6 @@
 #pragma once
-#include "VRInteractionSphere.h"
 
-namespace wearable
+namespace wearable_plugin
 {
     using namespace RE;
 
@@ -13,7 +12,6 @@ namespace wearable
         //NiNode* parent;
         std::string parentName;
         std::vector<std::string> nodeNames;
-        int InteractionSphere;
 
 
         // false indicates this object is in the user configuration state

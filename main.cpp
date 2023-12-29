@@ -34,7 +34,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse)
 
     g_pluginHandle = skse->GetPluginHandle();
     g_messaging = (SKSE::detail::SKSEMessagingInterface*)skse->QueryInterface(SKSE::LoadInterface::kMessaging);
-    wearable::g_task = (SKSE::detail::SKSETaskInterface*)(skse->QueryInterface(SKSE::LoadInterface::kTask));
+    wearable_plugin::g_task = (SKSE::detail::SKSETaskInterface*)(skse->QueryInterface(SKSE::LoadInterface::kTask));
 
     return true;
 }
@@ -88,22 +88,22 @@ void MessageListener(SKSE::MessagingInterface::Message* message)
         trace("kDataLoaded: sent after the data handler has loaded all its forms");
         InitializeHooking();
         // Initialize our mod.
-        if (!g_pluginError) wearable::StartMod();
+        if (!g_pluginError) wearable_plugin::StartMod();
         break;
 
     case SKSE::MessagingInterface::kPreLoadGame:
         trace("kPreLoadGame: sent immediately before savegame is read");
-        if (!g_pluginError) wearable::PreGameLoad();
+        if (!g_pluginError) wearable_plugin::PreGameLoad();
         break;
 
     case SKSE::MessagingInterface::kPostLoadGame:
         trace("kPostLoadGame: sent after an attempt to load a saved game has finished");
-        if (!g_pluginError) wearable::GameLoad();
+        if (!g_pluginError) wearable_plugin::GameLoad();
         break;
 
     case SKSE::MessagingInterface::kSaveGame:
         trace("kSaveGame");
-        if (!g_pluginError) wearable::GameSave();
+        if (!g_pluginError) wearable_plugin::GameSave();
         break;
 
     case SKSE::MessagingInterface::kDeleteGame:
@@ -130,8 +130,8 @@ void OnPapyrusVRMessage(SKSE::MessagingInterface::Message* message)
             SKSE::log::info("SkyrimVRTools Init Message recived with valid data, registering for callback");
             g_papyrusvr = (PapyrusVRAPI*)message->data;
 
-            wearable::g_VRManager = g_papyrusvr->GetVRManager();
-            wearable::g_OVRHookManager = g_papyrusvr->GetOpenVRHook();
+            wearable_plugin::g_VRManager = g_papyrusvr->GetVRManager();
+            wearable_plugin::g_OVRHookManager = g_papyrusvr->GetOpenVRHook();
         }
     }
 }
