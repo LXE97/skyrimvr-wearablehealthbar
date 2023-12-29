@@ -93,7 +93,6 @@ namespace helper
 			target->GetFirstGeometryOfShaderType(RE::BSShaderMaterial::Feature::kGlowMap);
 		if (geometry)
 		{
-			SKSE::log::debug("setglow: geometry found {}", geometry->name);
 			auto shaderProp = geometry->GetGeometryRuntimeData()
 			                      .properties[RE::BSGeometry::States::kEffect]
 			                      .get();
@@ -133,6 +132,21 @@ namespace helper
 			{
 				target->GetMagicTarget()->DispelEffect(spell, handle);
 			}
+		}
+	}
+
+	void PrintPlayerModelEffects()
+	{
+		if (const auto processLists = RE::ProcessLists::GetSingleton())
+		{
+			processLists->ForEachModelEffect([&](RE::ModelReferenceEffect& a_modelEffect) {
+				if (a_modelEffect.target.get()->AsReference() ==
+					RE::PlayerCharacter::GetSingleton()->AsReference())
+				{
+					SKSE::log::debug("MRE: {}", (void*)&a_modelEffect);
+				}
+				return RE::BSContainer::ForEachResult::kContinue;
+			});
 		}
 	}
 }

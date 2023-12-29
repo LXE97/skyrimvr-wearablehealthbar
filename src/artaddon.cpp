@@ -37,7 +37,7 @@ namespace helper
 	{
 		SKSE::log::trace("destroying art addon with target: {}", this->target->GetName());
 		// delete the NiNodes. if we haven't gotten a pointer to the ninode yet (it usually takes 1-2 frames), the manager will catch the orphaned node and delete it
-		if (initialized && root3D && attachNode && target && target->IsHandleValid())
+		if (root3D && attachNode && target && target->IsHandleValid())
 		{
 			SKSE::log::trace("detach child");
 			attachNode->AsNode()->DetachChild(root3D);
@@ -126,7 +126,7 @@ namespace helper
 		if (!cancel.empty())
 		{
 			SKSE::log::debug("deleting orphan ModelReferenceEffects");
-			helper::PrintModelEffects();
+			helper::PrintPlayerModelEffects();
 			if (const auto processLists = RE::ProcessLists::GetSingleton())
 			{
 				processLists->ForEachModelEffect([&](RE::ModelReferenceEffect& a_modelEffect) {

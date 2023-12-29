@@ -22,6 +22,7 @@ namespace helper
 			NiTransform& local);
 		~ArtAddon();
 
+		/** This can be used immediately because it schedules the transform to be set on the next Update */
 		void SetTransform(NiTransform& local);
 
 		/** Unlike the transform, any changes made through this will not be automatically preserved

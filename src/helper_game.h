@@ -20,6 +20,8 @@ namespace helper
 	void SetSpecularColor();
 	void SetTintColor();
 
+	void PrintPlayerModelEffects();
+
 	inline double GetQPC() noexcept
 	{
 		LARGE_INTEGER f, i;
@@ -29,20 +31,5 @@ namespace helper
 			return static_cast<double>(i.QuadPart) * frequency;
 		}
 		return 0.0;
-	}
-
-	inline void PrintModelEffects()
-	{
-		if (const auto processLists = RE::ProcessLists::GetSingleton())
-		{
-			processLists->ForEachModelEffect([&](RE::ModelReferenceEffect& a_modelEffect) {
-				if (a_modelEffect.target.get()->AsReference() ==
-					RE::PlayerCharacter::GetSingleton()->AsReference())
-				{
-					SKSE::log::debug("MRE: {}", (void*)&a_modelEffect);
-				}
-				return RE::BSContainer::ForEachResult::kContinue;
-			});
-		}
 	}
 }

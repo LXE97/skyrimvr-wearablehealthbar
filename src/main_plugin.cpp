@@ -11,6 +11,7 @@ namespace wearable_plugin
 {
 	using namespace vrinput;
 	using namespace RE;
+	using namespace helper;
 
 	// constants
 	constexpr FormID g_playerID = 0x14;
@@ -39,23 +40,36 @@ namespace wearable_plugin
 
 		return false;
 	}
-	bool onDEBUGBtnPressA()
+
+	std::vector<ArtAddon*> testv;
+	bool                  onDEBUGBtnPressA()
 	{
 		SKSE::log::trace("A press ");
 		if (!menuchecker::isGameStopped())
-		{}
+		{
+			auto        player = PlayerCharacter::GetSingleton();
+			NiTransform shitl;
+			testv.push_back(new ArtAddon("debug/debugsphere.nif", player,
+				player->GetNodeByName("skeleton.nif"), shitl));
+			testv.push_back(ArtAddon("debug/debugsphere.nif", player,
+				player->GetNodeByName("skeleton.nif"), shitl));
+			testv.push_back(ArtAddon("debug/debugsphere.nif", player,
+				player->GetNodeByName("skeleton.nif"), shitl));
+			testv.push_back(ArtAddon("debug/debugsphere.nif", player,
+				player->GetNodeByName("skeleton.nif"), shitl));
+		}
 		return false;
 	}
 
 	void OnOverlap(const OverlapEvent& e) { SKSE::log::trace("overlap event"); }
 
-	bool onDEBUGBtnPressB()
+	static bool ggg = false;
+	bool        onDEBUGBtnPressB()
 	{
 		SKSE::log::trace("B press ");
 		if (!menuchecker::isGameStopped())
 		{
-			static bool ggg = false;
-			if (ggg)
+			if (0 && ggg)
 			{
 				ggg = false;
 				OverlapSphereManager::GetSingleton()->ShowDebugSpheres();
@@ -83,6 +97,9 @@ namespace wearable_plugin
 	{
 		OverlapSphereManager::GetSingleton()->Update();
 		helper::ArtAddonManager::GetSingleton()->Update();
+		auto s = &(testv[0]);
+		auto foo = s->Get3D();
+		
 	}
 
 	void StartMod()
