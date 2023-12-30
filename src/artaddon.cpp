@@ -4,12 +4,30 @@
 
 namespace helper
 {
-	ArtAddon::ArtAddon(const char* modelPath, TESObjectREFR* a_target, NiAVObject* a_attachNode,
-		NiTransform& local)
+	ArtAddon::~ArtAddon()
 	{
-		SKSE::log::trace("Creating art addon with target: {}", a_target->GetName());
-		AO = ArtAddonManager::GetSingleton()->GetArtForm(modelPath);
-		if (AO && a_target && a_target->IsHandleValid())
+		SKSE::log::trace("destroying art addon {}", (void*)this);
+		// delete the NiNodes. if we haven't gotten a pointer to the ninode yet (it usually takes 1-2 frames), the manager will catch the orphaned node and delete it
+		if (root3D && attachNode && target && target->IsHandleValid())
+		{
+			attachNode->AsNode()->DetachChild(root3D);
+		} else
+		{
+			// add parameters to list of in-progress ModelReferenceEffects to delete
+			ArtAddonManager::GetSingleton()->cancel.push_back(
+				ArtAddonManager::toCancel{ .a = AO, .t = target });
+		}
+		ArtAddonManager::GetSingleton()->Deregister(weak_from_this());
+		SKSE::log::trace("		destroyed {}", (void*)this);
+	}
+
+	std::shared_ptr<ArtAddon> ArtAddon::Create(const char* modelPath, TESObjectREFR* a_target,
+		NiAVObject* a_attachNode, NiTransform& local)
+	{
+		auto new_obj = std::shared_ptr<ArtAddon>(new ArtAddon());
+		SKSE::log::trace("constructing art addon {}", (void*)new_obj.get());
+		auto AO = ArtAddonManager::GetSingleton()->GetArtForm(modelPath);
+		if (AO && a_target && a_target->IsHandleValid() && a_attachNode)
 		{
 			/** Ostensibly this returns a ModelReferenceEffect handle for the model, but it seems to return 1 in all circumstances.
              * So instead we'll clone the created NiNode and then immediately delete the ModelReferenceEffect and the original NiNode
@@ -19,35 +37,19 @@ namespace helper
              */
 			a_target->ApplyArtObject(AO);
 
-			desiredTransform = local;
-			initialized = false;
-			markedForUpdate = true;
-			attachNode = a_attachNode;
-			target = a_target;
+			new_obj->AO = AO;
+			new_obj->desiredTransform = local;
+			new_obj->initialized = false;
+			new_obj->markedForUpdate = true;
+			new_obj->attachNode = a_attachNode;
+			new_obj->target = a_target;
 
-			ArtAddonManager::GetSingleton()->addChild(this);
+			ArtAddonManager::GetSingleton()->Register(new_obj->weak_from_this());
 		} else
 		{
 			SKSE::log::error("Art addon failed: invalid target or model path");
-			throw std::invalid_argument("invalid target or model path");
 		}
-	}
-
-	ArtAddon::~ArtAddon()
-	{
-		SKSE::log::trace("destroying art addon with target: {}", this->target->GetName());
-		// delete the NiNodes. if we haven't gotten a pointer to the ninode yet (it usually takes 1-2 frames), the manager will catch the orphaned node and delete it
-		if (root3D && attachNode && target && target->IsHandleValid())
-		{
-			SKSE::log::trace("detach child");
-			attachNode->AsNode()->DetachChild(root3D);
-		} else
-		{
-			// add parameters to list of in-progress ModelReferenceEffects to delete
-			ArtAddonManager::GetSingleton()->cancel.push_back(
-				ArtAddonManager::toCancel{ .a = AO, .t = target });
-		}
-		ArtAddonManager::GetSingleton()->removeChild(this);
+		return new_obj;
 	}
 
 	void ArtAddon::SetTransform(NiTransform& local)
@@ -68,56 +70,66 @@ namespace helper
 	/** Must be called by some periodic function in the plugin file, e.g. PlayerCharacter::Update */
 	void ArtAddonManager::Update()
 	{
-		for (auto a : virtualObjects)
+		std::scoped_lock lock(vector_lock_);
+		auto             it = process_list_.begin();
+		while (it != process_list_.end())
 		{
-			// initialize
-			if (!a->initialized)
+			if (auto a = it->lock())
 			{
-				SKSE::log::debug("update artaddon {}: checking for model", (void*)a);
-				if (const auto processLists = RE::ProcessLists::GetSingleton())
+				// initialize
+				if (!a->initialized)
 				{
-					// find a modelEffect that matches this object's target and art
-					processLists->ForEachModelEffect([a](RE::ModelReferenceEffect& a_modelEffect) {
-						if (a_modelEffect.artObject == a->AO &&
-							a_modelEffect.target.get()->AsReference() == a->target &&
-							a_modelEffect.Get3D())
-						{
-							SKSE::log::debug("update artaddon {}: cloning", (void*)a);
-							a->root3D = a_modelEffect.Get3D()->Clone();
-							SKSE::log::debug("attaching");
-							a->attachNode->AsNode()->AttachChild(a->root3D);
-							SKSE::log::debug("deleting modeleffect");
-							a_modelEffect.Detach();
+					SKSE::log::debug("update artaddon {}: checking for model", (void*)a.get());
+					if (const auto processLists = RE::ProcessLists::GetSingleton())
+					{
+						// find a modelEffect that matches this object's target and art
+						processLists->ForEachModelEffect(
+							[a](RE::ModelReferenceEffect& a_modelEffect) {
+								if (a_modelEffect.artObject == a->AO &&
+									a_modelEffect.target.get()->AsReference() == a->target &&
+									a_modelEffect.Get3D())
+								{
+									SKSE::log::debug("update artaddon {}: cloning", (void*)a.get());
+									a->root3D = a_modelEffect.Get3D()->Clone();
+									a->attachNode->AsNode()->AttachChild(a->root3D);
+									a_modelEffect.Detach();
 
-							NiUpdateData ctx;
-							SKSE::log::debug("update transform");
-							a->root3D->local = a->desiredTransform;
-							a->root3D->Update(ctx);
-							a->markedForUpdate = false;
-							a->initialized = true;
+									NiUpdateData ctx;
+									a->root3D->local = a->desiredTransform;
+									a->root3D->Update(ctx);
+									a->markedForUpdate = false;
+									a->initialized = true;
 
-							return RE::BSContainer::ForEachResult::kStop;
-						}
-						return RE::BSContainer::ForEachResult::kContinue;
-					});
+									return RE::BSContainer::ForEachResult::kStop;
+								}
+								return RE::BSContainer::ForEachResult::kContinue;
+							});
+					}
 				}
-			}
-			// update
-			else if (a->markedForUpdate)
-			{
-				if (a->root3D)
+				// update
+				else if (a->markedForUpdate)
 				{
-					a->markedForUpdate = false;
-					NiUpdateData ctx;
-					a->root3D->local = a->desiredTransform;
-					a->root3D->Update(ctx);
+					SKSE::log::debug("update artaddon {}:", (void*)a.get());
+					if (a->root3D)
+					{
+						a->markedForUpdate = false;
+						NiUpdateData ctx;
+						a->root3D->local = a->desiredTransform;
+						a->root3D->Update(ctx);
+					}
 				}
-			}
-			// refresh after game save
-			if (postSaveGameUpdate)
+				// refresh after game save
+				if (postSaveGameUpdate)
+				{
+					a->target->ApplyArtObject(a->AO);
+					a->initialized = false;
+				}
+
+				++it;
+			} else
 			{
-				a->target->ApplyArtObject(a->AO);
-				a->initialized = false;
+				SKSE::log::debug("expired ptr, deregistering artaddon {}", (void*)&(*it));
+				it = process_list_.erase(it);
 			}
 		}
 		postSaveGameUpdate = false;
@@ -125,18 +137,24 @@ namespace helper
 		// cleanup orphaned models
 		if (!cancel.empty())
 		{
-			SKSE::log::debug("deleting orphan ModelReferenceEffects");
+			SKSE::log::debug("deleting orphan ModelReferenceEffects {}", cancel.size());
+
 			helper::PrintPlayerModelEffects();
 			if (const auto processLists = RE::ProcessLists::GetSingleton())
 			{
 				processLists->ForEachModelEffect([&](RE::ModelReferenceEffect& a_modelEffect) {
-					for (auto it = cancel.rbegin(); it != cancel.rend(); ++it)
+					auto it = cancel.begin();
+					while (it != cancel.end())
 					{
 						if (a_modelEffect.target.get()->AsReference() == it->t &&
 							a_modelEffect.artObject == it->a)
 						{
+							SKSE::log::debug("deleting MRE {} with AO {}", (void*)&a_modelEffect, (void*)(a_modelEffect.artObject));
 							a_modelEffect.Detach();
-							cancel.pop_back();
+							it = cancel.erase(it);
+						} else
+						{
+							++it;
 						}
 					}
 					return RE::BSContainer::ForEachResult::kContinue;
@@ -150,15 +168,19 @@ namespace helper
      */
 	void ArtAddonManager::PreSaveGame()
 	{
-		for (auto a : virtualObjects)
+		std::scoped_lock lock(vector_lock_);
+		for (const auto& wp : process_list_)
 		{
-			SKSE::log::debug("presave: addon found {}", (void*)a->root3D);
-			if (a->initialized && a->root3D)
+			if (auto a = wp.lock())
 			{
-				SKSE::log::debug("presave: deleting");
-				a->attachNode->AsNode()->DetachChild(a->root3D);
-				a->initialized = false;
-				a->root3D = nullptr;
+				SKSE::log::debug("presave: addon found {}", (void*)a->root3D);
+				if (a->initialized && a->root3D)
+				{
+					SKSE::log::debug("		presave: deleting");
+					a->attachNode->AsNode()->DetachChild(a->root3D);
+					a->initialized = false;
+					a->root3D = nullptr;
+				}
 			}
 		}
 
@@ -178,14 +200,17 @@ namespace helper
 		postSaveGameUpdate = true;
 	}
 
-	/** only called by ArtAddon ctor */
-	void ArtAddonManager::addChild(ArtAddon* a) { virtualObjects.push_back(a); }
-
-	/** only called by ArtAddon dtor */
-	void ArtAddonManager::removeChild(ArtAddon* a)
+	void ArtAddonManager::Register(const std::weak_ptr<ArtAddon>& a)
 	{
-		std::erase_if(virtualObjects, [a](const auto entry) {
-			return entry == a;
+		std::scoped_lock lock(vector_lock_);
+		process_list_.push_back(a);
+	}
+
+	void ArtAddonManager::Deregister(const std::weak_ptr<ArtAddon>& a)
+	{
+		std::scoped_lock lock(vector_lock_);
+		std::erase_if(process_list_, [a](const std::weak_ptr<ArtAddon>& wp) {
+			return wp.expired() || wp.lock() == a.lock();
 		});
 	}
 
@@ -208,6 +233,7 @@ namespace helper
 					auto temp = dupe->As<BGSArtObject>();
 					temp->SetModel(modelPath);
 					AOcache[modelPath] = temp;
+					SKSE::log::trace("Created new BGSArtObject: {}", (void*)temp);
 				}
 			} else
 			{

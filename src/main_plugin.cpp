@@ -1,6 +1,7 @@
 #include "main_plugin.h"
 #include <algorithm>
 #include <cmath>
+#include <thread>
 
 #include "Hooks.hpp"
 #include "helper_game.h"
@@ -23,11 +24,10 @@ namespace wearable_plugin
 	vr::TrackedDeviceIndex_t         g_r_controller;
 
 	// DEBUG
-	int32_t           g_debugLHandDrawSphere;
-	int32_t           g_debugRHandDrawSphere;
-	NiPoint3          g_higgs_palmPosHandspace;
-	NiPoint3          g_NPCHandPalmNormal = { 0, -1, 0 };
-	helper::ArtAddon* gg;
+	int32_t  g_debugLHandDrawSphere;
+	int32_t  g_debugRHandDrawSphere;
+	NiPoint3 g_higgs_palmPosHandspace;
+	NiPoint3 g_NPCHandPalmNormal = { 0, -1, 0 };
 
 	// TODO config file
 	vr::EVRButtonId g_config_SecondaryBtn = vr::k_EButton_SteamVR_Trigger;
@@ -37,39 +37,75 @@ namespace wearable_plugin
 	bool onDEBUGBtnReleaseA()
 	{
 		SKSE::log::trace("A release ");
-
+		helper::PrintPlayerModelEffects();
 		return false;
 	}
 
-	std::vector<ArtAddon*> testv;
-	bool                  onDEBUGBtnPressA()
+	std::shared_ptr<ArtAddon>      test1;
+	std::shared_ptr<ArtAddon>      test2;
+	std::shared_ptr<ArtAddon>      testchild;
+	std::shared_ptr<OverlapSphere> poopy;
+
+	bool onDEBUGBtnPressA()
 	{
-		SKSE::log::trace("A press ");
+		static std::ostringstream id;
+		static std::string        sid = id.str();
+		if (sid.empty())
+		{
+			id << std::this_thread::get_id();
+			sid = id.str();
+		}
+		SKSE::log::trace("A press {}", sid);
 		if (!menuchecker::isGameStopped())
 		{
 			auto        player = PlayerCharacter::GetSingleton();
 			NiTransform shitl;
-			testv.push_back(new ArtAddon("debug/debugsphere.nif", player,
-				player->GetNodeByName("skeleton.nif"), shitl));
-			testv.push_back(ArtAddon("debug/debugsphere.nif", player,
-				player->GetNodeByName("skeleton.nif"), shitl));
-			testv.push_back(ArtAddon("debug/debugsphere.nif", player,
-				player->GetNodeByName("skeleton.nif"), shitl));
-			testv.push_back(ArtAddon("debug/debugsphere.nif", player,
-				player->GetNodeByName("skeleton.nif"), shitl));
+
+			test2 = ArtAddon::Create("debug/debugsphere.nif", player,
+				player->Get3D(false)->GetObjectByName("AnimObjectR"), shitl);
+			test1 = ArtAddon::Create("debug/debugsphere.nif", player,
+				player->Get3D(false)->GetObjectByName("skeleton.nif"), shitl);
+			testchild = ArtAddon::Create("debug/debugsphere.nif", player,
+				player->Get3D(false)->GetObjectByName("skeleton.nif"), shitl);
+
+			auto root = player->Get3D(true)->GetObjectByName("skeleton.nif")->world;
+			auto dest = player->Get3D(true)->GetObjectByName("AnimObjectR");
+			auto t = dest->local;
+			t.scale = 1.0;
+			t.translate = root.Invert().rotate * (dest->world.translate - root.translate);
+			t.rotate = root.Invert().rotate * dest->world.rotate;
+			t.translate += t.rotate * NiPoint3(-10, 0, 0);
+			testchild->SetTransform(t);
+
+			t = dest->local;
+			t.scale = 4.0;
+			t.translate = root.Invert().rotate * (dest->world.translate - root.translate);
+			t.rotate = root.Invert().rotate * dest->world.rotate;
+			test1->SetTransform(t);
+
+			poopy = std::shared_ptr<OverlapSphere>(
+				new OverlapSphere("AnimObjectR", OnOverlap, 1, 0, { -10, 0, 0 }));
 		}
 		return false;
 	}
 
 	void OnOverlap(const OverlapEvent& e) { SKSE::log::trace("overlap event"); }
 
-	static bool ggg = false;
-	bool        onDEBUGBtnPressB()
+	static bool ggg = true;
+
+	bool onDEBUGBtnPressB()
 	{
-		SKSE::log::trace("B press ");
+		static std::ostringstream id;
+		static std::string        sid = id.str();
+		if (sid.empty())
+		{
+			id << std::this_thread::get_id();
+			sid = id.str();
+		}
+		SKSE::log::trace("B press {}", sid);
 		if (!menuchecker::isGameStopped())
 		{
-			if (0 && ggg)
+			if (ggg)
 			{
 				ggg = false;
 				OverlapSphereManager::GetSingleton()->ShowDebugSpheres();
@@ -92,15 +128,62 @@ namespace wearable_plugin
 			auto item = TESForm::LookupByID(event->baseObject);
 		}
 	}
-
+	int  once = 0;
 	void Update()
 	{
+		if (once++ % 500 == 0)
+		{
+			static std::ostringstream id;
+			static std::string        sid = id.str();
+			if (sid.empty())
+			{
+				id << std::this_thread::get_id();
+				sid = id.str();
+			}
+			SKSE::log::trace("update thread: {}", sid);
+		}
+
+		auto player = PlayerCharacter::GetSingleton();
+		auto root = player->Get3D(true)->GetObjectByName("skeleton.nif")->world;
+		if (test1)
+		{
+			if (auto node = test1->Get3D())
+			{
+				auto dest = player->Get3D(true)->GetObjectByName("AnimObjectR");
+				auto t = dest->local;
+
+				t = dest->local;
+				t.scale = 4.0;
+				t.translate = root.Invert().rotate * (dest->world.translate - root.translate);
+				t.rotate = root.Invert().rotate * dest->world.rotate;
+				node->local.translate = t.translate;
+			}
+		}
+
+		if (testchild)
+		{
+			if (auto node = testchild->Get3D())
+			{
+				auto dest = player->Get3D(true)->GetObjectByName("AnimObjectR");
+				auto t = dest->local;
+
+				t.translate = root.Invert().rotate * (dest->world.translate - root.translate);
+				t.rotate = root.Invert().rotate * dest->world.rotate;
+				t.translate += t.rotate * NiPoint3(-10, 0, 0);
+
+				node->local.translate = t.translate;
+			}
+		}
+
 		OverlapSphereManager::GetSingleton()->Update();
 		helper::ArtAddonManager::GetSingleton()->Update();
-		auto s = &(testv[0]);
-		auto foo = s->Get3D();
-		
 	}
+
+	void GameLoad() { auto player = RE::PlayerCharacter::GetSingleton(); }
+
+	void PreGameLoad() {}
+
+	void GameSave() { helper::ArtAddonManager::GetSingleton()->PreSaveGame(); }
 
 	void StartMod()
 	{
@@ -120,10 +203,11 @@ namespace wearable_plugin
 		{
 			// TODO: read this from config
 			g_higgs_palmPosHandspace = { 0, -2.4, 6 };
-			vrinput::OverlapSphereManager::GetSingleton()->set_palm_offset(
-				g_higgs_palmPosHandspace);
 			g_higgsInterface->AddPostVrikPostHiggsCallback(&Update);
 		}
+
+		// Other Manager setup
+		vrinput::OverlapSphereManager::GetSingleton()->set_palm_offset(g_higgs_palmPosHandspace);
 
 		// register event sinks and handlers
 		auto equipSink = EventSink<TESEquipEvent>::GetSingleton();
@@ -135,20 +219,6 @@ namespace wearable_plugin
 		vrinput::AddCallback(vr::k_EButton_ApplicationMenu, onDEBUGBtnPressB, Right, Press,
 			ButtonDown);
 	}
-
-	void GameLoad()
-	{
-		auto player = RE::PlayerCharacter::GetSingleton();
-
-		NiTransform g;
-		g.translate = g_higgs_palmPosHandspace;
-		auto fuck = "AnimObjectL";
-		new OverlapSphere(fuck, &OnOverlap, 5.0, 0.0);
-	}
-
-	void PreGameLoad() {}
-
-	void GameSave() { helper::ArtAddonManager::GetSingleton()->PreSaveGame(); }
 
 	// handles low level button/trigger events
 	bool ControllerInput_CB(vr::TrackedDeviceIndex_t unControllerDeviceIndex,

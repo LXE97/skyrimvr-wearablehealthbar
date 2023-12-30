@@ -11,11 +11,15 @@ namespace vrinput
 		: attach_node_name_(node_name), callback_(callback), local_position_(offset),
 		  squared_radius_(radius * radius), max_angle_(max_angle_deg), normal_(normal)
 	{
-		SKSE::log::trace("Overlap sphere created on {}", node_name);
+		SKSE::log::trace("constructing overlap: {}", (void*)this);
 		OverlapSphereManager::GetSingleton()->Register(this);
 	}
 
-	OverlapSphere::~OverlapSphere() { OverlapSphereManager::GetSingleton()->UnRegister(this); }
+	OverlapSphere::~OverlapSphere()
+	{
+		SKSE::log::trace("destroying overlap: {}", (void*)this);
+		OverlapSphereManager::GetSingleton()->UnRegister(this);
+	}
 
 	void OverlapSphereManager::Update()
 	{
@@ -27,13 +31,12 @@ namespace vrinput
 											kControllerNodeName[0]),
 				player->Get3D(true)->GetObjectByName(kControllerNodeName[1]) };
 
-			RE::NiPoint3 sphere_world;
+			NiPoint3         sphere_world;
+			std::scoped_lock lock(vector_lock_);
 			for (auto& sphere : process_list_)
 			{
-				//SKSE::log::trace("update: {}", (void*)sphere);
 				if (auto node = player->Get3D(true)->GetObjectByName(sphere->attach_node_name_))
 				{
-					// Update virtual sphere position.
 					if (sphere->local_position_ != NiPoint3::Zero())
 					{
 						sphere_world =
@@ -45,7 +48,7 @@ namespace vrinput
 
 					// Test collision.
 					bool changed = false;
-					for (bool isLeft : { false })
+					for (bool isLeft : { false, true })
 					{
 						float dist = sphere_world.GetSquaredDistance(
 							controllers[isLeft]->world.translate +
@@ -67,7 +70,7 @@ namespace vrinput
 							!sphere->overlap_state_[isLeft])
 						{
 							changed = SendEvent(sphere, true, isLeft);
-						}// use hysteresis on exit threshold
+						}  // use hysteresis on exit threshold
 						else if ((dist > sphere->squared_radius_ + kHysteresis ||
 									 angle > sphere->max_angle_ + kHysteresisAngular) &&
 								 sphere->overlap_state_[isLeft])
@@ -97,29 +100,33 @@ namespace vrinput
 		}
 	}
 
-	void OverlapSphereManager::Reset() { process_list_.clear(); }
+	void OverlapSphereManager::Reset()
+	{
+		std::scoped_lock lock(vector_lock_);
+		process_list_.clear();
+	}
 
 	void OverlapSphereManager::ShowDebugSpheres()
 	{
 		if (!draw_spheres_)
 		{
-			/* Make dummy overlap spheres to visualize the player's hands, then take ownership of 
-            * their display models and delete the virtual spheres 
-            */
-			std::unique_ptr<OverlapSphere> temp_spheres[2];
-
+			auto        player = PlayerCharacter::GetSingleton();
+			NiTransform t;
+			t.translate = palm_offset_;
+			t.scale = kControllerDebugModelScale;
+			t.rotate = helper::RotateBetweenVectors(NiPoint3(1.0, 0, 0), kHandPalmNormal);
 			for (auto isLeft : { false, true })
 			{
-				temp_spheres[isLeft] = std::make_unique<OverlapSphere>(
-					kControllerNodeName[isLeft], [](const OverlapEvent&) {},
-					kControllerDebugModelScale, 0, palm_offset_, kHandPalmNormal);
+				controller_debug_models_[isLeft] =
+					helper::ArtAddon::Create("debug/debugsphere.nif", player->AsReference(),
+						player->Get3D(false)->GetObjectByName(kControllerNodeName[isLeft]), t);
 			}
+
+			std::scoped_lock lock(vector_lock_);
 			for (auto s : process_list_)
 			{
 				s->visible_debug_sphere_ = CreateDebugSphere(s);
 			}
-			controller_debug_models_[0] = std::move(temp_spheres[0]->visible_debug_sphere_);
-			controller_debug_models_[1] = std::move(temp_spheres[1]->visible_debug_sphere_);
 
 			draw_spheres_ = true;
 		}
@@ -127,6 +134,7 @@ namespace vrinput
 
 	void OverlapSphereManager::HideDebugSpheres()
 	{
+		std::scoped_lock lock(vector_lock_);
 		if (draw_spheres_)
 		{
 			for (auto isLeft : { false, true })
@@ -140,7 +148,6 @@ namespace vrinput
 					s->visible_debug_sphere_.reset();
 				}
 			}
-
 			draw_spheres_ = false;
 		}
 	}
@@ -149,6 +156,7 @@ namespace vrinput
 
 	const void OverlapSphereManager::Register(OverlapSphere* s)
 	{
+		std::scoped_lock lock(vector_lock_);
 		process_list_.push_back(s);
 		if (draw_spheres_)
 		{
@@ -158,10 +166,12 @@ namespace vrinput
 
 	const void OverlapSphereManager::UnRegister(OverlapSphere* s)
 	{
+		std::scoped_lock lock(vector_lock_);
 		std::erase_if(process_list_, [s](const auto entry) { return entry == s; });
+		SKSE::log::trace("		destroyed overlap: {}", (void*)s);
 	}
 
-	std::unique_ptr<helper::ArtAddon> OverlapSphereManager::CreateDebugSphere(OverlapSphere* s)
+	std::shared_ptr<helper::ArtAddon> OverlapSphereManager::CreateDebugSphere(OverlapSphere* s)
 	{
 		auto        player = PlayerCharacter::GetSingleton();
 		NiTransform t;
@@ -171,7 +181,7 @@ namespace vrinput
 		{
 			t.rotate = helper::RotateBetweenVectors(NiPoint3(1.0, 0, 0), s->normal_);
 		}
-		return std::make_unique<helper::ArtAddon>(kDebugModelPath, player->AsReference(),
+		return helper::ArtAddon::Create(kDebugModelPath, player->AsReference(),
 			player->Get3D(false)->GetObjectByName(s->attach_node_name_), t);
 	}
 

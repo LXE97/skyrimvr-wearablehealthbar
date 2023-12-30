@@ -139,14 +139,24 @@ namespace helper
 	{
 		if (const auto processLists = RE::ProcessLists::GetSingleton())
 		{
+			int player = 0;
+			int dangling = 0;
 			processLists->ForEachModelEffect([&](RE::ModelReferenceEffect& a_modelEffect) {
 				if (a_modelEffect.target.get()->AsReference() ==
 					RE::PlayerCharacter::GetSingleton()->AsReference())
 				{
-					SKSE::log::debug("MRE: {}", (void*)&a_modelEffect);
+					if (a_modelEffect.artObject)
+					{
+						SKSE::log::debug("MRE:{}  AO:{}", (void*)&a_modelEffect, (void*)a_modelEffect.artObject);
+						player++;
+					} else
+					{
+						dangling++;
+					}
 				}
 				return RE::BSContainer::ForEachResult::kContinue;
 			});
+			SKSE::log::debug("{} player effects and {} dangling MRE", player, dangling);
 		}
 	}
 }

@@ -31,7 +31,7 @@ namespace wearable_plugin
     bool onDEBUGBtnReleaseA();
     bool onDEBUGBtnPressB();
     void onEquipEvent(const RE::TESEquipEvent* event);
-    void onOverlap(const vrinput::OverlapEvent& e);
+    void OnOverlap(const vrinput::OverlapEvent& e);
 
     // low level input
     bool ControllerInput_CB(vr::TrackedDeviceIndex_t unControllerDeviceIndex, const vr::VRControllerState_t* pControllerState, uint32_t unControllerStateSize, vr::VRControllerState_t* pOutputControllerState);

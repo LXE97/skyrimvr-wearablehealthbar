@@ -34,7 +34,7 @@ namespace vrinput
 		const char*                       attach_node_name_;
 		float                             max_angle_;
 		float                             squared_radius_;
-		std::unique_ptr<helper::ArtAddon> visible_debug_sphere_;
+		std::shared_ptr<helper::ArtAddon> visible_debug_sphere_;
 	};
 
 	class OverlapSphereManager
@@ -64,10 +64,11 @@ namespace vrinput
 		const float                   kControllerDebugModelScale = 1.0f;
 		const int                     kOnHexColor = 0xffdc00;
 		const int                     kOffHexColor = 0xff00ff;
+		std::mutex                    vector_lock_;
 
 		const void                        Register(OverlapSphere* s);
 		const void                        UnRegister(OverlapSphere* s);
-		std::unique_ptr<helper::ArtAddon> CreateDebugSphere(OverlapSphere* s);
+		std::shared_ptr<helper::ArtAddon> CreateDebugSphere(OverlapSphere* s);
 		bool                              SendEvent(OverlapSphere* s, bool entered, bool isLeft);
 
 		OverlapSphereManager();
@@ -77,7 +78,7 @@ namespace vrinput
 		OverlapSphereManager& operator=(OverlapSphereManager&&) = delete;
 
 		std::vector<OverlapSphere*>       process_list_;
-		std::unique_ptr<helper::ArtAddon> controller_debug_models_[2];
+		std::shared_ptr<helper::ArtAddon> controller_debug_models_[2];
 		RE::NiPoint3                      palm_offset_ = RE::NiPoint3::Zero();
 		bool                              draw_spheres_ = false;
 		RE::NiColor*                      on_;

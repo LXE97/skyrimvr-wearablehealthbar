@@ -13,14 +13,21 @@ namespace helper
      *  initialization and maintenance of the corresponding 3D objects. This class represents a
      *  request to the manager to create the 3D model and a storage for tracking its state.
      */
-	class ArtAddon
+	class ArtAddon : public std::enable_shared_from_this<ArtAddon>
 	{
 		friend class ArtAddonManager;
 
 	public:
-		ArtAddon(const char* modelPath, TESObjectREFR* target, NiAVObject* attachNode,
-			NiTransform& local);
-		~ArtAddon();
+		/** Constructs a new ArtAddon, queues the creation of its 3D model, and adds it to the list
+         * of objects to process during ArtAddonManager::Update()
+         * 
+         * modelPath:   path to the *.nif file relative to Data/meshes/
+         * target:      object to attach the 3D to
+         * attachNode:  parent node for the new 3D, must be a 3rd person skeleton node for the player
+         * local:       transform relative to the attachNode
+         */
+		static std::shared_ptr<ArtAddon> Create(const char* modelPath, TESObjectREFR* target,
+			NiAVObject* attachNode, NiTransform& local);
 
 		/** This can be used immediately because it schedules the transform to be set on the next Update */
 		void SetTransform(NiTransform& local);
@@ -29,6 +36,8 @@ namespace helper
          *  by the Manager, so they must be re-applied after game save/load.
          */
 		NiAVObject* Get3D();
+
+		~ArtAddon();
 
 	private:
 		bool           initialized;
@@ -39,6 +48,7 @@ namespace helper
 		TESObjectREFR* target;
 		NiAVObject*    attachNode;
 
+		ArtAddon() = default;
 		ArtAddon(const ArtAddon&) = delete;
 		ArtAddon(ArtAddon&&) = delete;
 		ArtAddon& operator=(const ArtAddon&) = delete;
@@ -47,7 +57,8 @@ namespace helper
 
 	class ArtAddonManager
 	{
-		friend ArtAddon::ArtAddon(const char*, TESObjectREFR*, NiAVObject*, NiTransform&);
+		friend std::shared_ptr<ArtAddon> ArtAddon::Create(const char*, TESObjectREFR*, NiAVObject*,
+			NiTransform&);
 		friend ArtAddon::~ArtAddon();
 
 	public:
@@ -74,12 +85,13 @@ namespace helper
 		ArtAddonManager& operator=(ArtAddonManager&&) = delete;
 
 		BGSArtObject* GetArtForm(const char* modelPath);
-		void          addChild(ArtAddon* a);
-		void          removeChild(ArtAddon* a);
+		void          Register(const std::weak_ptr<ArtAddon>& a);
+		void          Deregister(const std::weak_ptr<ArtAddon>& a);
 
+		std::mutex                                     vector_lock_;
 		BGSArtObject*                                  baseAO;
 		std::unordered_map<const char*, BGSArtObject*> AOcache;
-		std::vector<ArtAddon*>                         virtualObjects;
+		std::vector<std::weak_ptr<ArtAddon>>           process_list_;
 		bool                                           postSaveGameUpdate = false;
 		const FormID                                   baseAOID = 0x9405f;
 
