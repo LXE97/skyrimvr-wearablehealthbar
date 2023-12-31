@@ -33,90 +33,7 @@ namespace wearable_plugin
 	vr::EVRButtonId g_config_SecondaryBtn = vr::k_EButton_SteamVR_Trigger;
 	vr::EVRButtonId g_config_PrimaryBtn = vr::k_EButton_Grip;
 
-	bool print = false;
-	bool onDEBUGBtnReleaseA()
-	{
-		SKSE::log::trace("A release ");
-		helper::PrintPlayerModelEffects();
-		return false;
-	}
-
-	std::shared_ptr<ArtAddon>      test1;
-	std::shared_ptr<ArtAddon>      test2;
-	std::shared_ptr<ArtAddon>      testchild;
-	std::shared_ptr<OverlapSphere> poopy;
-
-	bool onDEBUGBtnPressA()
-	{
-		static std::ostringstream id;
-		static std::string        sid = id.str();
-		if (sid.empty())
-		{
-			id << std::this_thread::get_id();
-			sid = id.str();
-		}
-		SKSE::log::trace("A press {}", sid);
-		if (!menuchecker::isGameStopped())
-		{
-			auto        player = PlayerCharacter::GetSingleton();
-			NiTransform shitl;
-
-			test2 = ArtAddon::Create("debug/debugsphere.nif", player,
-				player->Get3D(false)->GetObjectByName("AnimObjectR"), shitl);
-			test1 = ArtAddon::Create("debug/debugsphere.nif", player,
-				player->Get3D(false)->GetObjectByName("skeleton.nif"), shitl);
-			testchild = ArtAddon::Create("debug/debugsphere.nif", player,
-				player->Get3D(false)->GetObjectByName("skeleton.nif"), shitl);
-
-			auto root = player->Get3D(true)->GetObjectByName("skeleton.nif")->world;
-			auto dest = player->Get3D(true)->GetObjectByName("AnimObjectR");
-			auto t = dest->local;
-			t.scale = 1.0;
-			t.translate = root.Invert().rotate * (dest->world.translate - root.translate);
-			t.rotate = root.Invert().rotate * dest->world.rotate;
-			t.translate += t.rotate * NiPoint3(-10, 0, 0);
-			testchild->SetTransform(t);
-
-			t = dest->local;
-			t.scale = 4.0;
-			t.translate = root.Invert().rotate * (dest->world.translate - root.translate);
-			t.rotate = root.Invert().rotate * dest->world.rotate;
-			test1->SetTransform(t);
-
-			poopy = std::shared_ptr<OverlapSphere>(
-				new OverlapSphere("AnimObjectR", OnOverlap, 1, 0, { -10, 0, 0 }));
-		}
-		return false;
-	}
-
 	void OnOverlap(const OverlapEvent& e) { SKSE::log::trace("overlap event"); }
-
-	static bool ggg = true;
-
-	bool onDEBUGBtnPressB()
-	{
-		static std::ostringstream id;
-		static std::string        sid = id.str();
-		if (sid.empty())
-		{
-			id << std::this_thread::get_id();
-			sid = id.str();
-		}
-		SKSE::log::trace("B press {}", sid);
-		if (!menuchecker::isGameStopped())
-		{
-			if (ggg)
-			{
-				ggg = false;
-				OverlapSphereManager::GetSingleton()->ShowDebugSpheres();
-			} else
-			{
-				ggg = true;
-				OverlapSphereManager::GetSingleton()->HideDebugSpheres();
-			}
-		}
-		return false;
-	}
 
 	void onEquipEvent(const TESEquipEvent* event)
 	{
@@ -128,52 +45,33 @@ namespace wearable_plugin
 			auto item = TESForm::LookupByID(event->baseObject);
 		}
 	}
-	int  once = 0;
+
+	bool onDEBUGBtnReleaseA()
+	{
+		SKSE::log::trace("A release ");
+		helper::PrintPlayerModelEffects();
+		return false;
+	}
+
+	bool onDEBUGBtnPressA()
+	{
+		SKSE::log::trace("A press");
+		if (!menuchecker::isGameStopped())
+		{}
+		return false;
+	}
+
+	bool onDEBUGBtnPressB()
+	{
+		SKSE::log::trace("B press");
+		if (!menuchecker::isGameStopped())
+		{}
+		return false;
+	}
+
 	void Update()
 	{
-		if (once++ % 500 == 0)
-		{
-			static std::ostringstream id;
-			static std::string        sid = id.str();
-			if (sid.empty())
-			{
-				id << std::this_thread::get_id();
-				sid = id.str();
-			}
-			SKSE::log::trace("update thread: {}", sid);
-		}
-
 		auto player = PlayerCharacter::GetSingleton();
-		auto root = player->Get3D(true)->GetObjectByName("skeleton.nif")->world;
-		if (test1)
-		{
-			if (auto node = test1->Get3D())
-			{
-				auto dest = player->Get3D(true)->GetObjectByName("AnimObjectR");
-				auto t = dest->local;
-
-				t = dest->local;
-				t.scale = 4.0;
-				t.translate = root.Invert().rotate * (dest->world.translate - root.translate);
-				t.rotate = root.Invert().rotate * dest->world.rotate;
-				node->local.translate = t.translate;
-			}
-		}
-
-		if (testchild)
-		{
-			if (auto node = testchild->Get3D())
-			{
-				auto dest = player->Get3D(true)->GetObjectByName("AnimObjectR");
-				auto t = dest->local;
-
-				t.translate = root.Invert().rotate * (dest->world.translate - root.translate);
-				t.rotate = root.Invert().rotate * dest->world.rotate;
-				t.translate += t.rotate * NiPoint3(-10, 0, 0);
-
-				node->local.translate = t.translate;
-			}
-		}
 
 		OverlapSphereManager::GetSingleton()->Update();
 		helper::ArtAddonManager::GetSingleton()->Update();

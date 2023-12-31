@@ -117,9 +117,9 @@ namespace vrinput
 			t.rotate = helper::RotateBetweenVectors(NiPoint3(1.0, 0, 0), kHandPalmNormal);
 			for (auto isLeft : { false, true })
 			{
-				controller_debug_models_[isLeft] =
-					helper::ArtAddon::Create("debug/debugsphere.nif", player->AsReference(),
-						player->Get3D(false)->GetObjectByName(kControllerNodeName[isLeft]), t);
+				//controller_debug_models_[isLeft] =
+				//	helper::ArtAddon::Create("debug/debugsphere.nif", player->AsReference(),
+				//		player->Get3D(false)->GetObjectByName(kControllerNodeName[isLeft]), t);
 			}
 
 			std::scoped_lock lock(vector_lock_);
