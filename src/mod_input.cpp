@@ -10,6 +10,8 @@ namespace vrinput
         bool operator==(const InputCallback& a_rhs) { return (flags == a_rhs.flags) && (func == a_rhs.func); }
     };
 
+    std::mutex callback_lock;
+
     // each button id is mapped to a list of callback funcs
     std::unordered_map<vr::EVRButtonId, std::vector<InputCallback>> callbacks;
     std::unordered_map<vr::EVRButtonId, bool> buttonStates;
@@ -73,6 +75,7 @@ namespace vrinput
 
     void AddCallback(const vr::EVRButtonId button, InputCallbackFunc callback, bool isLeft, bool onTouch, bool onButtonDown)
     {
+        std::scoped_lock lock(callback_lock);
         if (!callback)
             return;
 
@@ -83,6 +86,7 @@ namespace vrinput
 
     void RemoveCallback(const vr::EVRButtonId button, InputCallbackFunc callback, bool isLeft, bool onTouch, bool onButtonDown)
     {
+        std::scoped_lock lock(callback_lock);
         if (!callback)
             return;
 

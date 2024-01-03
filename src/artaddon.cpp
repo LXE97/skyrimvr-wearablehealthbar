@@ -1,227 +1,120 @@
 #include "artaddon.h"
 #include "helper_game.h"
-#undef PROFILING_EN
 
-namespace helper
+namespace art_addon
 {
-    ArtAddon::ArtAddon(const char* modelPath, TESObjectREFR* a_target, NiAVObject* a_attachNode, NiTransform& local)
-    {
-        SKSE::log::trace("Creating art addon with target: {}", a_target->GetName());
-        AO = ArtAddonManager::GetSingleton()->GetArtForm(modelPath);
-        if (AO && a_target && a_target->IsHandleValid())
-        {
-            /** Ostensibly this returns a ModelReferenceEffect handle for the model, but it seems to return 1 in all circumstances.
-             * So instead we'll clone the created NiNode and then immediately delete the ModelReferenceEffect and the original NiNode
-             * using the ProcessList. This is for the best as ModelReferenceEffects that reference temporary BGSArtObject forms become
-             * baked into the save as null references that can't be deleted in any way. The Manager also deletes all added geometry and
-             * effects on game save just to be safe. It's left up to the user to delete ArtAddon objects on game load.
-             */
-            a_target->ApplyArtObject(AO);
+	using namespace RE;
 
-            desiredTransform = local;
-            initialized = false;
-            markedForUpdate = true;
-            attachNode = a_attachNode;
-            target = a_target;
+	std::shared_ptr<ArtAddon> ArtAddon::Make(const char* a_model_path, TESObjectREFR* a_target,
+		NiAVObject* a_attach_node, NiTransform& a_local)
+	{
+		auto             manager = ArtAddonManager::GetSingleton();
+		auto             art_object = manager->GetArtForm(a_model_path);
+		int              id = manager->GetNextId();
+		std::scoped_lock lock(manager->objects_lock);
+		
+		/** Using the duration parameter of the BSTempEffect as an ID because anything < 0 has the
+		 * same effect. If another mod happens to use this library there will be ID collisions but
+		 * they are still distinguished by the unique BGSArtObject property. */
+		if (art_object && a_attach_node && a_target && a_target->IsHandleValid() &&
+			a_target->ApplyArtObject(art_object, (float)id))
+		{
+			SKSE::log::trace("created MRE: {}", id);
 
-            ArtAddonManager::GetSingleton()->addChild(this);
-        }
-        else
-        {
-            SKSE::log::error("Art addon failed: invalid target or model path");
-            throw std::invalid_argument("invalid target or model path");
-        }
-    }
+			auto new_obj = std::shared_ptr<ArtAddon>(new ArtAddon);
+			new_obj->art_object = art_object;
+			new_obj->local = a_local;
+			new_obj->attach_node = a_attach_node;
+			new_obj->target = a_target;
 
-    ArtAddon::~ArtAddon()
-    {
-        SKSE::log::trace("destroying art addon with target: {}", this->target->GetName());
-        // delete the NiNodes. if we haven't gotten a pointer to the ninode yet (it usually takes 1-2 frames), the manager will catch the orphaned node and delete it
-        if (initialized && root3D && attachNode && target && target->IsHandleValid())
-        {
-            SKSE::log::trace("detach child");
-            attachNode->AsNode()->DetachChild(root3D);
-        }
-        else
-        {
-            // add parameters to list of in-progress ModelReferenceEffects to delete
-            ArtAddonManager::GetSingleton()->cancel.push_back(ArtAddonManager::toCancel(AO, target));
-        }
-        ArtAddonManager::GetSingleton()->removeChild(this);
-    }
+			manager->new_objects.emplace(id, new_obj);
+			return new_obj;
+		} else
+		{
+			SKSE::log::error("Art addon failed: invalid target or model path");
+			return nullptr;
+		}
+	}
 
-    void ArtAddon::SetTransform(NiTransform& local)
-    {
-        desiredTransform = local;
-        markedForUpdate = true;
-    }
+	NiAVObject* ArtAddon::Get3D() { return root3D; }
 
-    NiAVObject* ArtAddon::Get3D()
-    {
-        if (initialized && target->IsHandleValid())
-        {
-            return root3D;
-        }
-        return nullptr;
-    }
+	/** Ostensibly ApplyArtObject() returns a ModelReferenceEffect handle for the model, but
+	 * it seems to return 1 in all circumstances. So instead we'll clone the created NiNode
+	 * and then delete the ModelReferenceEffect and the original NiNode using the ProcessList.
+	 */
+	void ArtAddonManager::Update()
+	{
+		if (!new_objects.empty())
+		{
+			std::scoped_lock lock(objects_lock);
+			if (const auto processLists = ProcessLists::GetSingleton())
+			{
+				processLists->ForEachModelEffect([this](ModelReferenceEffect& a_modelEffect) {
+					if (a_modelEffect.Get3D() && a_modelEffect.lifetime < -1.0f)
+					{
+						int id = a_modelEffect.lifetime;
+						if (new_objects.contains(id))
+						{
+							if (auto addon = new_objects[id].lock())
+							{
+								// the id is not unique to this mod but the ArtObject is
+								if (addon->art_object == a_modelEffect.artObject)
+								{
+									addon->root3D = a_modelEffect.Get3D()->Clone();
+									addon->attach_node->AsNode()->AttachChild(addon->root3D);
+									SKSE::log::trace("deleting MRE: {}", id);
+									a_modelEffect.Detach();
+									addon->root3D->local = std::move(addon->local);
+								}
+							} else
+							{  // check if it's one of our ArtObjects
+								auto it = std::find_if(artobject_cache.begin(),
+									artobject_cache.end(), [&a_modelEffect](const auto& pair) {
+										return pair.second == a_modelEffect.artObject;
+									});
+								if (it != artobject_cache.end())
+								{  // the artAddon was deleted before initialization finished
+									a_modelEffect.Detach();
+									SKSE::log::trace("deleting MRE {} (orphaned)", id);
+								}
+							}
+							// finished with this ArtAddon, no longer need to track it
+							new_objects.erase(id);
+						}
+					}
+					return BSContainer::ForEachResult::kContinue;
+				});
+			}
+		}
+	}
 
-    /** Must be called by some periodic function in the plugin file, e.g. PlayerCharacter::Update */
-    void ArtAddonManager::Update()
-    {
-        for (auto a : virtualObjects)
-        {
-            // initialize
-            if (!a->initialized)
-            {
-                SKSE::log::debug("update artaddon {}: checking for model", (void*)a);
-                if (const auto processLists = RE::ProcessLists::GetSingleton())
-                {
-                    // find a modelEffect that matches this object's target and art
-                    processLists->ForEachModelEffect([a](RE::ModelReferenceEffect& a_modelEffect)
-                        {
-                            if (a_modelEffect.artObject == a->AO && a_modelEffect.target.get()->AsReference() == a->target && a_modelEffect.Get3D())
-                            {
-                                SKSE::log::debug("update artaddon {}: cloning", (void*)a);
-                                a->root3D = a_modelEffect.Get3D()->Clone();
-                                SKSE::log::debug("attaching");
-                                a->attachNode->AsNode()->AttachChild(a->root3D);
-                                SKSE::log::debug("deleting modeleffect");
-                                a_modelEffect.Detach();
+	BGSArtObject* ArtAddonManager::GetArtForm(const char* modelPath)
+	{
+		if (!artobject_cache.contains(modelPath))
+		{
+			if (base_artobject)
+			{
+				if (auto dupe = base_artobject->CreateDuplicateForm(false, nullptr))
+				{
+					auto temp = dupe->As<BGSArtObject>();
+					temp->SetModel(modelPath);
+					artobject_cache[modelPath] = temp;
+					return temp;
+				}
+			} else
+			{
+				return nullptr;
+			}
+		}
+		return artobject_cache[modelPath];
+	}
 
-                                NiUpdateData ctx;
-                                SKSE::log::debug("update transform");
-                                a->root3D->local = a->desiredTransform;
-                                a->root3D->Update(ctx);
-                                a->markedForUpdate = false;
-                                a->initialized = true;
+	int ArtAddonManager::GetNextId() { return next_Id--; }
 
-                                return RE::BSContainer::ForEachResult::kStop;
-                            }
-                            return RE::BSContainer::ForEachResult::kContinue;
-                        });
-                }
-            }
-            // update
-            else if (a->markedForUpdate)
-            {
-                if (a->root3D)
-                {
-                    a->markedForUpdate = false;
-                    NiUpdateData ctx;
-                    a->root3D->local = a->desiredTransform;
-                    a->root3D->Update(ctx);
-                }
-            }
-            // refresh after game save
-            if (postSaveGameUpdate)
-            {
-                a->target->ApplyArtObject(a->AO);
-                a->initialized = false;
-            }
-        }
-        postSaveGameUpdate = false;
+	ArtAddonManager::ArtAddonManager()
+	{
+		constexpr FormID kBaseArtobjectId = 0x9405f;
 
-        // cleanup orphaned models
-        if (!cancel.empty())
-        {
-            SKSE::log::debug("deleting orphan ModelReferenceEffects");
-            if (const auto processLists = RE::ProcessLists::GetSingleton())
-            {
-                processLists->ForEachModelEffect([&](RE::ModelReferenceEffect& a_modelEffect)
-                    {
-                        for (auto it = cancel.rbegin(); it != cancel.rend(); ++it)
-                        {
-                            if (a_modelEffect.target.get()->AsReference() == it->t
-                                && a_modelEffect.artObject == it->a)
-                            {
-                                a_modelEffect.Detach();
-                                cancel.pop_back();
-                            }
-                        }
-                        return RE::BSContainer::ForEachResult::kContinue;
-                    });
-            }
-        }
-    }
-
-    /** Must be called when the game is saved.
-     * Deletes all ModelReferenceEffects and geometry added by this mod and sets the flag to re-create them.
-     */
-    void ArtAddonManager::PreSaveGame()
-    {
-        for (auto a : virtualObjects)
-        {
-            SKSE::log::debug("presave: addon found {}", (void*)a->root3D);
-            if (a->initialized && a->root3D)
-            {
-                SKSE::log::debug("presave: deleting");
-                a->attachNode->AsNode()->DetachChild(a->root3D);
-                a->initialized = false;
-                a->root3D = nullptr;
-            }
-        }
-
-        // delete any hanging ModelReferenceEffects that use temporary forms we created
-        if (const auto processLists = RE::ProcessLists::GetSingleton())
-        {
-            processLists->ForEachModelEffect([&](RE::ModelReferenceEffect& a_modelEffect)
-                {
-                    if (std::any_of(AOcache.begin(), AOcache.end(), [&](const auto& pair)
-                        {
-                            return pair.second == a_modelEffect.artObject;
-                        }))
-                    {
-                        a_modelEffect.Detach();
-                    }
-                    return RE::BSContainer::ForEachResult::kContinue;
-                });
-        }
-
-        postSaveGameUpdate = true;
-    }
-
-    /** only called by ArtAddon ctor */
-    void ArtAddonManager::addChild(ArtAddon* a)
-    {
-        virtualObjects.push_back(a);
-    }
-
-    /** only called by ArtAddon dtor */
-    void ArtAddonManager::removeChild(ArtAddon* a)
-    {
-        std::erase_if(virtualObjects, [a](const auto entry)
-            {
-                SKSE::log::debug("destroying virtual object {}", (void*)a);
-                return entry == a;
-            });
-    }
-
-    ArtAddonManager::ArtAddonManager()
-    {
-        if (auto temp = TESForm::LookupByID(baseAOID))
-        {
-            baseAO = temp->As<BGSArtObject>();
-        }
-    }
-
-    BGSArtObject* ArtAddonManager::GetArtForm(const char* modelPath)
-    {
-        if (!AOcache.contains(modelPath))
-        {
-            if (baseAO)
-            {
-                if (auto dupe = baseAO->CreateDuplicateForm(false, nullptr))
-                {
-                    auto temp = dupe->As<BGSArtObject>();
-                    temp->SetModel(modelPath);
-                    AOcache[modelPath] = temp;
-                }
-            }
-            else
-            {
-                return nullptr;
-            }
-        }
-        return AOcache[modelPath];
-    }
+		base_artobject = TESForm::LookupByID(kBaseArtobjectId)->As<BGSArtObject>();
+	}
 }

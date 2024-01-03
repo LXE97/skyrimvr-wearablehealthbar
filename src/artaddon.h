@@ -1,87 +1,86 @@
-/** Library for sticking arbitrary .nifs to ObjectReferences.
+/** Library for sticking arbitrary nif files to ObjectReferences.
  * It uses temporary BGSArtObject forms that are recycled on exit to main menu or desktop.
  * From my testing it's safe to create 0x400000 of these forms before the game hangs, but we'll
  * cache them anyway for repeated use of the same model.
  */
 #pragma once
 
-namespace helper
+#include <chrono>
+#include <future>
+#include <memory>
+
+namespace art_addon
 {
-    using namespace RE;
+	class ArtAddon
+	{
+		friend class ArtAddonManager;
 
-    /** The user has ownership of the virtual art object, but the manager automates the initialization and maintenance
-     * of the corresponding 3D objects. This class represents a request to the manager to create the 3D model and
-     * a storage for tracking its state.
-     */
-    class ArtAddon
-    {
-        friend class ArtAddonManager;
-    public:
-        ArtAddon(const char* modelPath, TESObjectREFR* target, NiAVObject* attachNode, NiTransform& local);
-        ~ArtAddon();
+	public:
+		/** Returns: nullptr if modelPath is invalid
+		 * 
+		 * Constructs a new ArtAddon and queues the creation of its 3D model.
+         * 
+         * modelPath:   path to the *.nif file relative to Data/meshes/
+         * target:      object to attach the 3D to
+         * attachNode:  parent node for the new 3D, must be a 3rd person node for the player
+         * local:       transform relative to the attachNode
+		 */
+		static std::shared_ptr<ArtAddon> Make(const char* a_model_path, RE::TESObjectREFR* a_target,
+			RE::NiAVObject* a_attach_node, RE::NiTransform& a_local);
 
-        void SetTransform(NiTransform& local);
+		/** Returns: Pointer to the attached NiAVObject. nullptr if initialization hasn't finished. */
+		RE::NiAVObject* Get3D();
 
-        /** Unlike the transform, any changes made through this will not be automatically preserved by the Manager */
-        NiAVObject* Get3D();
-    private:
-        bool initialized;
-        bool markedForUpdate;
-        NiAVObject* root3D;
-        BGSArtObject* AO;
-        NiTransform desiredTransform;
-        TESObjectREFR* target;
-        NiAVObject* attachNode;
+		~ArtAddon()
+		{
+			if (root3D) { root3D->parent->DetachChild(root3D); }
+		}
 
-        ArtAddon(const ArtAddon&) = delete;
-        ArtAddon(ArtAddon&&) = delete;
-        ArtAddon& operator=(const ArtAddon&) = delete;
-        ArtAddon& operator=(ArtAddon&&) = delete;
-    };
+	private:
+		RE::NiAVObject*    root3D = nullptr;
+		RE::TESObjectREFR* target = nullptr;
+		RE::BGSArtObject*  art_object = nullptr;
+		RE::NiAVObject*    attach_node = nullptr;
+		RE::NiTransform    local;
 
-    class ArtAddonManager
-    {
-        friend ArtAddon::ArtAddon(const char*, TESObjectREFR*, NiAVObject*, NiTransform&);
-        friend ArtAddon::~ArtAddon();
-    public:
-        /** Must be called by some periodic function in the plugin file, e.g. PlayerCharacter::Update */
-        void Update();
+		ArtAddon() = default;
+		ArtAddon(const ArtAddon&) = delete;
+		ArtAddon(ArtAddon&&) = delete;
+		ArtAddon& operator=(const ArtAddon&) = delete;
+		ArtAddon& operator=(ArtAddon&&) = delete;
+	};
+	using ArtAddonPtr = std::shared_ptr<ArtAddon>;
 
-        /** Must be called on SKSE save event. */
-        void PreSaveGame();
+	class ArtAddonManager
+	{
+		friend ArtAddon;
 
-        static ArtAddonManager* GetSingleton()
-        {
-            static ArtAddonManager singleton;
-            return &singleton;
-        }
+	public:
+		/** Must be called regularly e.g. in PlayerCharacter::Update() */
+		void Update();
 
-    private:
-        ArtAddonManager();
-        ~ArtAddonManager() = default;
-        ArtAddonManager(const ArtAddonManager&) = delete;
-        ArtAddonManager(ArtAddonManager&&) = delete;
-        ArtAddonManager& operator=(const ArtAddonManager&) = delete;
-        ArtAddonManager& operator=(ArtAddonManager&&) = delete;
+		static ArtAddonManager* GetSingleton()
+		{
+			static ArtAddonManager singleton;
+			return &singleton;
+		}
 
-        BGSArtObject* GetArtForm(const char* modelPath);
-        void addChild(ArtAddon* a);
-        void removeChild(ArtAddon* a);
+	private:
+		std::unordered_map<int, std::weak_ptr<ArtAddon>>   new_objects;
+		std::mutex                                         objects_lock;
+		std::unordered_map<const char*, RE::BGSArtObject*> artobject_cache;
+		RE::BGSArtObject*                                  base_artobject;
+		int                                                next_Id = -2;
 
+		RE::BGSArtObject* GetArtForm(const char* a_modelPath);
+		int               GetNextId();
 
-        BGSArtObject* baseAO;
-        std::unordered_map<const char*, BGSArtObject*> AOcache;
-        std::vector<ArtAddon*> virtualObjects;
-        bool postSaveGameUpdate = false;
-        const FormID baseAOID = 0x9405f;
+		ArtAddonManager();
+		~ArtAddonManager() = default;
+		ArtAddonManager(const ArtAddonManager&) = delete;
+		ArtAddonManager(ArtAddonManager&&) = delete;
+		ArtAddonManager& operator=(const ArtAddonManager&) = delete;
+		ArtAddonManager& operator=(ArtAddonManager&&) = delete;
+	};
 
-        // to handle the case that an ArtAddon is destroyed before its 3D data is instantiated
-        struct toCancel {
-            toCancel(BGSArtObject* a, TESObjectREFR* t) : a(a), t(t) {}
-            BGSArtObject* a;
-            TESObjectREFR* t;
-        };
-        std::vector<toCancel> cancel;
-
-    };
 }

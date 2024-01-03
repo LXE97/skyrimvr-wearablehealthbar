@@ -1,6 +1,6 @@
 #include "wearable.h"
 
-namespace wearable
+namespace wearable_plugin
 {
 
 
