@@ -5,169 +5,202 @@ namespace vrinput
 	using namespace RE;
 	using namespace art_addon;
 
-	const bool OverlapSphere::is_overlapping(bool isLeft) { return overlap_state_[isLeft]; };
+	const bool OverlapSphere::is_overlapping(bool isLeft) { return overlap_state[isLeft]; };
 
-	OverlapSphere::OverlapSphere(const char* node_name, OverlapCallback callback, float radius,
-		float max_angle_deg, const RE::NiPoint3& offset, const RE::NiPoint3& normal) :
-		attach_node_name_(node_name),
-		callback_(callback), local_position_(offset), squared_radius_(radius * radius),
-		max_angle_(max_angle_deg), normal_(normal)
+	std::shared_ptr<OverlapSphere> OverlapSphere::Make(NiAVObject* a_attach_to,
+		OverlapCallback a_callback, float a_radius, float a_max_angle_deg,
+		const NiPoint3& a_offset, const NiPoint3& a_normal)
 	{
-		SKSE::log::trace("constructing overlap: {}", (void*)this);
-		OverlapSphereManager::GetSingleton()->Register(this);
+		std::scoped_lock lock(OverlapSphereManager::GetSingleton()->process_lock);
+
+		auto new_obj = std::shared_ptr<OverlapSphere>(new OverlapSphere);
+		new_obj->attach_node = a_attach_to;
+		new_obj->callback = a_callback;
+		new_obj->squared_radius = a_radius * a_radius;
+		new_obj->max_angle = a_max_angle_deg;
+		new_obj->local_position = a_offset;
+		new_obj->normal = a_normal;
+		new_obj->id = OverlapSphereManager::GetSingleton()->GetNextId();
+
+		OverlapSphereManager::GetSingleton()->process_list.push_back(new_obj);
+		return new_obj;
 	}
 
-	OverlapSphere::~OverlapSphere()
+	float OverlapSphereManager::Update()
 	{
-		SKSE::log::trace("destroying overlap: {}", (void*)this);
-		OverlapSphereManager::GetSingleton()->UnRegister(this);
-	}
-
-	void OverlapSphereManager::Update()
-	{
-		auto player = RE::PlayerCharacter::GetSingleton();
-		if (player->Get3D(true)) {
-			// with VRIK, use 1st person nodes for collision detection
+		constexpr float ktracking_error_threshold = 4.0f;
+		auto            player = PlayerCharacter::GetSingleton();
+		if (player->Get3D(true))
+		{
+			auto start = std::chrono::steady_clock::now();
+			// check difference between 1st person and 3rd person nodes
 			NiAVObject* controllers[2]{ player->Get3D(true)->GetObjectByName(
 											kControllerNodeName[0]),
 				player->Get3D(true)->GetObjectByName(kControllerNodeName[1]) };
+			auto third_person_right = player->Get3D(false)->GetObjectByName(kControllerNodeName[0]);
+			if (third_person_right->world.translate.GetSquaredDistance(
+					controllers[0]->world.translate) > ktracking_error_threshold)
+			{
+				return 0.0f;
+			}
+			std::scoped_lock lock(process_lock);
 
-			NiPoint3         sphere_world;
-			std::scoped_lock lock(vector_lock_);
-			for (auto& sphere : process_list_) {
-				if (auto node = player->Get3D(true)->GetObjectByName(sphere->attach_node_name_)) {
-					if (sphere->local_position_ != NiPoint3::Zero()) {
-						sphere_world =
-							node->world.translate + node->world.rotate * sphere->local_position_;
-					} else {
-						sphere_world = node->world.translate;
-					}
-
-					// Test collision.
-					bool changed = false;
-					for (bool isLeft : { false, true }) {
-						float dist = sphere_world.GetSquaredDistance(
-							controllers[isLeft]->world.translate +
-							controllers[isLeft]->world.rotate * palm_offset_);
-
-						float angle = 0.0f;
-						if (sphere->normal_ != NiPoint3::Zero() && sphere->max_angle_) {
-							auto normal_worldspace =
-								helper::VectorNormalized(node->world.rotate * sphere->normal_);
-							auto palm_normal_worldspace = helper::VectorNormalized(
-								controllers[isLeft]->world.rotate * kHandPalmNormal);
-							angle = std::acos(
-								helper::DotProductSafe(normal_worldspace, palm_normal_worldspace));
+			NiPoint3 sphere_world;
+			for (auto& wp : process_list)
+			{
+				if (auto sphere = wp.lock())
+				{
+					if (auto node = sphere->attach_node)
+					{
+						if (sphere->local_position != NiPoint3::Zero())
+						{
+							sphere_world =
+								node->world.translate + node->world.rotate * sphere->local_position;
+						} else
+						{
+							sphere_world = node->world.translate;
 						}
 
-						// entered sphere
-						if (dist <= sphere->squared_radius_ && angle <= sphere->max_angle_ &&
-							!sphere->overlap_state_[isLeft]) {
-							changed = SendEvent(sphere, true, isLeft);
-						}  // use hysteresis on exit threshold
-						else if ((dist > sphere->squared_radius_ + kHysteresis ||
-									 angle > sphere->max_angle_ + kHysteresisAngular) &&
-								 sphere->overlap_state_[isLeft]) {
-							changed = SendEvent(sphere, false, isLeft);
-						}
+						// Test collision.
+						bool changed = false;
+						for (bool isLeft : { true })
+						{
+							float dist = sphere_world.GetSquaredDistance(
+								controllers[isLeft]->world.translate +
+								controllers[isLeft]->world.rotate * palm_offset);
 
-						// Reflect both collision states in sphere color
-						if (changed && draw_spheres_ && sphere->visible_debug_sphere_) {
-							changed = false;
+							float angle = 0.0f;
+							if (sphere->normal != NiPoint3::Zero() && sphere->max_angle)
+							{
+								auto normal_worldspace =
+									helper::VectorNormalized(node->world.rotate * sphere->normal);
+								auto palm_normal_worldspace = helper::VectorNormalized(
+									controllers[isLeft]->world.rotate * kHandPalmNormal);
+								angle = std::acos(helper::DotProductSafe(normal_worldspace,
+									palm_normal_worldspace));
+							}
 
-							if (auto visible_node = sphere->visible_debug_sphere_->Get3D()) {
-								if (sphere->overlap_state_[0] || sphere->overlap_state_[1]) {
-									helper::SetGlowColor(visible_node, on_);
-								} else if (!sphere->overlap_state_[0] &&
-										   !sphere->overlap_state_[1]) {
-									helper::SetGlowColor(visible_node, off_);
+							// entered sphere
+							if (dist <= sphere->squared_radius && angle <= sphere->max_angle &&
+								!sphere->overlap_state[isLeft])
+							{
+								sphere->overlap_state[isLeft] = true;
+								changed = SendEvent(*sphere, true, isLeft);
+							}  // use hysteresis on exit threshold
+							else if ((dist > sphere->squared_radius + kHysteresis ||
+										 angle > sphere->max_angle + kHysteresisAngular) &&
+									 sphere->overlap_state[isLeft])
+							{
+								sphere->overlap_state[isLeft] = false;
+								changed = SendEvent(*sphere, false, isLeft);
+							}
+
+							// Reflect both collision states in sphere color
+							if (changed && draw_spheres && sphere->visible_debug_sphere)
+							{
+								changed = false;
+
+								if (auto visible_node = sphere->visible_debug_sphere->Get3D())
+								{
+									if (sphere->overlap_state[0] || sphere->overlap_state[1])
+									{
+										helper::SetGlowColor(visible_node, on);
+									} else if (!sphere->overlap_state[0] &&
+											   !sphere->overlap_state[1])
+									{
+										helper::SetGlowColor(visible_node, off_);
+									}
 								}
 							}
 						}
 					}
+				} else
+				{  // expired ptr
 				}
 			}
+			auto end = std::chrono::steady_clock::now();
+			return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 		}
-	}
-
-	void OverlapSphereManager::Reset()
-	{
-		std::scoped_lock lock(vector_lock_);
-		process_list_.clear();
+		return 0;
 	}
 
 	void OverlapSphereManager::ShowDebugSpheres()
 	{
-		if (!draw_spheres_) {
-			auto        player = PlayerCharacter::GetSingleton();
+		if (!draw_spheres)
+		{
+			auto player = PlayerCharacter::GetSingleton();
+
 			NiTransform t;
-			t.translate = palm_offset_;
-			t.scale = kControllerDebugModelScale;
+
+			t.translate = palm_offset;
+			t.scale = kModelScale;
 			t.rotate = helper::RotateBetweenVectors(NiPoint3(1.0, 0, 0), kHandPalmNormal);
-			for (auto isLeft : { false, true }) {
-				//controller_debug_models_[isLeft] =
-				//	helper::ArtAddon::Create("debug/debugsphere.nif", player->AsReference(),
-				//		player->Get3D(false)->GetObjectByName(kControllerNodeName[isLeft]), t);
+			for (auto isLeft : { false, true })
+			{
+				controller_models[isLeft] =
+					art_addon::ArtAddon::Make("debug/debugsphere.nif", player->AsReference(),
+						player->Get3D(false)->GetObjectByName(kControllerNodeName[isLeft]), t);
 			}
 
-			std::scoped_lock lock(vector_lock_);
-			for (auto s : process_list_) { s->visible_debug_sphere_ = CreateDebugSphere(s); }
+			std::scoped_lock lock(process_lock);
+			for (auto& wp : process_list)
+			{
+				if (auto s = wp.lock()) { s->visible_debug_sphere = CreateVisibleSphere(*s); }
+			}
 
-			draw_spheres_ = true;
+			draw_spheres = true;
 		}
 	}
 
 	void OverlapSphereManager::HideDebugSpheres()
 	{
-		std::scoped_lock lock(vector_lock_);
-		if (draw_spheres_) {
-			for (auto isLeft : { false, true }) { controller_debug_models_[isLeft].reset(); }
-			for (auto& s : process_list_) {
-				if (s->visible_debug_sphere_) { s->visible_debug_sphere_.reset(); }
+		if (draw_spheres)
+		{
+			std::scoped_lock lock(process_lock);
+			for (auto isLeft : { false, true }) { controller_models[isLeft].reset(); }
+			for (auto& wp : process_list)
+			{
+				if (auto s = wp.lock())
+				{
+					if (s->visible_debug_sphere) { s->visible_debug_sphere.reset(); }
+				}
 			}
-			draw_spheres_ = false;
+			draw_spheres = false;
 		}
 	}
 
-	void OverlapSphereManager::set_palm_offset(RE::NiPoint3& offset) { palm_offset_ = offset; }
-
-	const void OverlapSphereManager::Register(OverlapSphere* s)
+	void OverlapSphereManager::SetPalmOffset(const RE::NiPoint3& a_offset)
 	{
-		std::scoped_lock lock(vector_lock_);
-		process_list_.push_back(s);
-		if (draw_spheres_) { CreateDebugSphere(s); }
+		palm_offset = a_offset;
 	}
 
-	const void OverlapSphereManager::UnRegister(OverlapSphere* s)
-	{
-		std::scoped_lock lock(vector_lock_);
-		std::erase_if(process_list_, [s](const auto entry) { return entry == s; });
-		SKSE::log::trace("		destroyed overlap: {}", (void*)s);
-	}
-
-	ArtAddonPtr OverlapSphereManager::CreateDebugSphere(OverlapSphere* s)
+	ArtAddonPtr OverlapSphereManager::CreateVisibleSphere(const OverlapSphere& a_s)
 	{
 		auto        player = PlayerCharacter::GetSingleton();
 		NiTransform t;
-		t.translate = s->local_position_;
-		t.scale = std::sqrt(s->squared_radius_);
-		if (s->normal_ != NiPoint3::Zero()) {
-			t.rotate = helper::RotateBetweenVectors(NiPoint3(1.0, 0, 0), s->normal_);
+		t.translate = a_s.local_position;
+		t.scale = std::sqrt(a_s.squared_radius);
+		if (a_s.normal != NiPoint3::Zero())
+		{
+			t.rotate = helper::RotateBetweenVectors(NiPoint3(1.0, 0, 0), a_s.normal);
 		}
-		return ArtAddon::Make(kDebugModelPath, player->AsReference(),
-			player->Get3D(false)->GetObjectByName(s->attach_node_name_), t);
+		return ArtAddon::Make(kModelPath, player->AsReference(), a_s.attach_node, t);
 	}
 
-	bool OverlapSphereManager::SendEvent(OverlapSphere* s, bool entered, bool isLeft)
+	int OverlapSphereManager::GetNextId() { return nextId++; }
+
+	bool OverlapSphereManager::SendEvent(const OverlapSphere& a_s, bool a_entered, bool isLeft)
 	{
-		s->overlap_state_[isLeft] = entered;
-		if (s->callback_) { s->callback_(OverlapEvent{ .entered = entered, .isLeft = isLeft }); }
+		if (a_s.callback)
+		{
+			a_s.callback(OverlapEvent{ .entered = a_entered, .isLeft = isLeft, .id = a_s.id });
+		}
 		return true;
 	}
 
 	OverlapSphereManager::OverlapSphereManager()
 	{
-		on_ = new NiColor(kOnHexColor);
+		on = new NiColor(kOnHexColor);
 		off_ = new NiColor(kOffHexColor);
 	}
 

@@ -19,7 +19,7 @@ namespace art_addon
 		if (art_object && a_attach_node && a_target && a_target->IsHandleValid() &&
 			a_target->ApplyArtObject(art_object, (float)id))
 		{
-			SKSE::log::trace("created MRE: {}", id);
+			//SKSE::log::trace("created MRE: {}", id);
 
 			auto new_obj = std::shared_ptr<ArtAddon>(new ArtAddon);
 			new_obj->art_object = art_object;
@@ -62,7 +62,7 @@ namespace art_addon
 								{
 									addon->root3D = a_modelEffect.Get3D()->Clone();
 									addon->attach_node->AsNode()->AttachChild(addon->root3D);
-									SKSE::log::trace("deleting MRE: {}", id);
+									//SKSE::log::trace("deleting MRE: {}", id);
 									a_modelEffect.Detach();
 									addon->root3D->local = std::move(addon->local);
 								}
@@ -109,7 +109,7 @@ namespace art_addon
 		return artobject_cache[modelPath];
 	}
 
-	int ArtAddonManager::GetNextId() { return next_Id--; }
+	int ArtAddonManager::GetNextId() { return next_id--; }
 
 	ArtAddonManager::ArtAddonManager()
 	{
