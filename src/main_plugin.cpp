@@ -13,6 +13,7 @@ namespace wearable_plugin
 	using namespace vrinput;
 	using namespace RE;
 	using namespace helper;
+	using namespace art_addon;
 
 	// constants
 	constexpr FormID g_playerID = 0x14;
@@ -49,23 +50,37 @@ namespace wearable_plugin
 	bool onDEBUGBtnReleaseA()
 	{
 		SKSE::log::trace("A release ");
-		helper::PrintPlayerModelEffects();
 		return false;
+	}
+
+	std::vector<ArtAddonPtr> a;
+	void                     poop()
+	{
+		NiTransform n;
+		a.clear();
+		for (int i = 0; i < 20; i++)
+		{
+			a.push_back(ArtAddon::Make("debug/debugsphere.nif", PlayerCharacter::GetSingleton(),
+				PlayerCharacter::GetSingleton()->Get3D(false)->GetObjectByName("AnimObjectR"), n));
+		}
+		PrintPlayerModelEffects();
 	}
 
 	bool onDEBUGBtnPressA()
 	{
 		SKSE::log::trace("A press");
 		if (!menuchecker::isGameStopped())
-		{}
+		{
+			poop();
+			
+		}
 		return false;
 	}
 
 	bool onDEBUGBtnPressB()
 	{
 		SKSE::log::trace("B press");
-		if (!menuchecker::isGameStopped())
-		{}
+		if (!menuchecker::isGameStopped()) { PrintPlayerModelEffects(); }
 		return false;
 	}
 
@@ -74,14 +89,14 @@ namespace wearable_plugin
 		auto player = PlayerCharacter::GetSingleton();
 
 		OverlapSphereManager::GetSingleton()->Update();
-		helper::ArtAddonManager::GetSingleton()->Update();
+		ArtAddonManager::GetSingleton()->Update();
 	}
 
 	void GameLoad() { auto player = RE::PlayerCharacter::GetSingleton(); }
 
 	void PreGameLoad() {}
 
-	void GameSave() { helper::ArtAddonManager::GetSingleton()->PreSaveGame(); }
+	void GameSave() { SKSE::log::trace("game save event"); }
 
 	void StartMod()
 	{

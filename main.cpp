@@ -47,9 +47,8 @@ void MessageListener(SKSE::MessagingInterface::Message* message)
     switch (message->type)
     {
     case SKSE::MessagingInterface::kPostLoad:
-        trace("kPostLoad: sent to registered plugins once all plugins have been loaded");
+        // trace("kPostLoad: sent to registered plugins once all plugins have been loaded");
         info("Registering for SkyrimVRTools messages");
-        // SkyrimVRTools registered here
         g_messaging->RegisterListener(g_pluginHandle, "SkyrimVRTools", OnPapyrusVRMessage);
         break;
 
@@ -81,41 +80,41 @@ void MessageListener(SKSE::MessagingInterface::Message* message)
         break;
 
     case SKSE::MessagingInterface::kInputLoaded:
-        trace("kInputLoaded: sent right after game input is loaded, right before the main menu initializes");
+        // trace("kInputLoaded: sent right after game input is loaded, right before the main menu initializes");
         break;
 
     case SKSE::MessagingInterface::kDataLoaded:
-        trace("kDataLoaded: sent after the data handler has loaded all its forms");
+        // trace("kDataLoaded: sent after the data handler has loaded all its forms");
         InitializeHooking();
         // Initialize our mod.
         if (!g_pluginError) wearable_plugin::StartMod();
         break;
 
     case SKSE::MessagingInterface::kPreLoadGame:
-        trace("kPreLoadGame: sent immediately before savegame is read");
+        // trace("kPreLoadGame: sent immediately before savegame is read");
         if (!g_pluginError) wearable_plugin::PreGameLoad();
         break;
 
     case SKSE::MessagingInterface::kPostLoadGame:
-        trace("kPostLoadGame: sent after an attempt to load a saved game has finished");
+        // trace("kPostLoadGame: sent after an attempt to load a saved game has finished");
         if (!g_pluginError) wearable_plugin::GameLoad();
         break;
 
     case SKSE::MessagingInterface::kSaveGame:
-        trace("kSaveGame");
+        // trace("kSaveGame");
         if (!g_pluginError) wearable_plugin::GameSave();
         break;
 
     case SKSE::MessagingInterface::kDeleteGame:
-        trace("kDeleteGame: sent right before deleting the .skse cosave and the .ess save");
+        // trace("kDeleteGame: sent right before deleting the .skse cosave and the .ess save");
         break;
 
     case SKSE::MessagingInterface::kNewGame:
-        trace("kNewGame: sent after a new game is created, before the game has loaded");
+        // trace("kNewGame: sent after a new game is created, before the game has loaded");
         break;
 
     default:
-        trace("Unknown system message of type: {}", message->type);
+        // trace("Unknown system message of type: {}", message->type);
         break;
     }
 }

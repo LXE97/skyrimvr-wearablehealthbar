@@ -22,19 +22,20 @@ namespace vrinput
 		OverlapSphere(const char* node_name, OverlapCallback callback, float radius,
 			float max_angle_deg = 0.0f, const RE::NiPoint3& offset = RE::NiPoint3(0.0, 0.0, 0.0),
 			const RE::NiPoint3& normal = RE::NiPoint3(0.0, 0.0, 0.0));
+			
 		~OverlapSphere();
 
 		const bool is_overlapping(bool isLeft);
 
 	private:
-		OverlapCallback                   callback_;
-		bool                              overlap_state_[2] = { false, false };
-		RE::NiPoint3                      local_position_;
-		RE::NiPoint3                      normal_;
-		const char*                       attach_node_name_;
-		float                             max_angle_;
-		float                             squared_radius_;
-		std::shared_ptr<helper::ArtAddon> visible_debug_sphere_;
+		OverlapCallback                      callback_;
+		bool                                 overlap_state_[2] = { false, false };
+		RE::NiPoint3                         local_position_;
+		RE::NiPoint3                         normal_;
+		const char*                          attach_node_name_;
+		float                                max_angle_;
+		float                                squared_radius_;
+		std::shared_ptr<art_addon::ArtAddon> visible_debug_sphere_;
 	};
 
 	class OverlapSphereManager
@@ -66,10 +67,10 @@ namespace vrinput
 		const int                     kOffHexColor = 0xff00ff;
 		std::mutex                    vector_lock_;
 
-		const void                        Register(OverlapSphere* s);
-		const void                        UnRegister(OverlapSphere* s);
-		std::shared_ptr<helper::ArtAddon> CreateDebugSphere(OverlapSphere* s);
-		bool                              SendEvent(OverlapSphere* s, bool entered, bool isLeft);
+		const void             Register(OverlapSphere* s);
+		const void             UnRegister(OverlapSphere* s);
+		art_addon::ArtAddonPtr CreateDebugSphere(OverlapSphere* s);
+		bool                   SendEvent(OverlapSphere* s, bool entered, bool isLeft);
 
 		OverlapSphereManager();
 		OverlapSphereManager(const OverlapSphereManager&) = delete;
@@ -77,12 +78,12 @@ namespace vrinput
 		OverlapSphereManager& operator=(const OverlapSphereManager&) = delete;
 		OverlapSphereManager& operator=(OverlapSphereManager&&) = delete;
 
-		std::vector<OverlapSphere*>       process_list_;
-		std::shared_ptr<helper::ArtAddon> controller_debug_models_[2];
-		RE::NiPoint3                      palm_offset_ = RE::NiPoint3::Zero();
-		bool                              draw_spheres_ = false;
-		RE::NiColor*                      on_;
-		RE::NiColor*                      off_;
+		std::vector<OverlapSphere*> process_list_;
+		art_addon::ArtAddonPtr      controller_debug_models_[2];
+		RE::NiPoint3                palm_offset_ = RE::NiPoint3::Zero();
+		bool                        draw_spheres_ = false;
+		RE::NiColor*                on_;
+		RE::NiColor*                off_;
 	};
 
 }
