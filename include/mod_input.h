@@ -3,6 +3,9 @@
 
 namespace vrinput
 {
+	extern vr::TrackedDeviceIndex_t g_leftcontroller;
+	extern vr::TrackedDeviceIndex_t g_rightcontroller;
+
 	enum whichController
 	{
 		Left = true,
@@ -37,7 +40,14 @@ namespace vrinput
 	void RemoveCallback(const vr::EVRButtonId a_button, InputCallbackFunc a_callback, bool isLeft,
 		bool onTouch, bool onButtonDown);
 
-	// Must be called by the ControllerStateCB registered to the OpenVR Hook Manager when a change in button states is detected
-	void processButtonChanges(uint64_t changedMask, uint64_t currentState, bool isLeft, bool touch,
-		vr::VRControllerState_t* out);
+	void StartBlockingAll();
+	void StopBlockingAll();
+	bool isBlockingAll();
+
+	void StartSmoothing(float a_damping_factor);
+	void StopSmoothing();
+
+	bool ControllerInput_CB(vr::TrackedDeviceIndex_t unControllerDeviceIndex,
+		const vr::VRControllerState_t* pControllerState, uint32_t unControllerStateSize,
+		vr::VRControllerState_t* pOutputControllerState);
 }
