@@ -1,12 +1,13 @@
 #include "main_plugin.h"
+
+#include "helper_game.h"
+#include "helper_math.h"
+#include "hooks.hpp"
+#include "menu_checker.h"
+
 #include <algorithm>
 #include <cmath>
 #include <thread>
-
-#include "Hooks.hpp"
-#include "helper_game.h"
-#include "helper_math.h"
-#include "menuchecker.h"
 
 namespace wearable_plugin
 {
@@ -31,65 +32,77 @@ namespace wearable_plugin
 	NiPoint3 g_NPCHandPalmNormal = { 0, -1, 0 };
 
 	// TODO config file
-	vr::EVRButtonId g_config_SecondaryBtn = vr::k_EButton_SteamVR_Trigger;
-	vr::EVRButtonId g_config_PrimaryBtn = vr::k_EButton_Grip;
+	vr::EVRButtonId    g_config_SecondaryBtn = vr::k_EButton_SteamVR_Trigger;
+	vr::EVRButtonId    g_config_PrimaryBtn = vr::k_EButton_Grip;
+	std::vector<float> times;
 
-	void OnOverlap(const OverlapEvent& e) { SKSE::log::trace("overlap event"); }
-
-	void onEquipEvent(const TESEquipEvent* event)
-	{
-		SKSE::log::info("equip event: getting actor");
-		auto player = PlayerCharacter::GetSingleton();
-		if (player && player == event->actor.get())
-		{
-			SKSE::log::info("equip event: looking up formid");
-			auto item = TESForm::LookupByID(event->baseObject);
-		}
-	}
-
+	void OnOverlap(const OverlapEvent& e) { SKSE::log::trace("overlap event {}", e.id);
+	 }
+OverlapSpherePtr s;
 	bool onDEBUGBtnReleaseA()
 	{
 		SKSE::log::trace("A release ");
-		return false;
-	}
-
-	std::vector<ArtAddonPtr> a;
-	void                     poop()
-	{
-		NiTransform n;
-		a.clear();
-		for (int i = 0; i < 20; i++)
-		{
-			a.push_back(ArtAddon::Make("debug/debugsphere.nif", PlayerCharacter::GetSingleton(),
-				PlayerCharacter::GetSingleton()->Get3D(false)->GetObjectByName("AnimObjectR"), n));
+		if (!menuchecker::isGameStopped()) {
+			s.reset();
 		}
-		PrintPlayerModelEffects();
+		return false;
 	}
 
 	bool onDEBUGBtnPressA()
 	{
+		auto player = PlayerCharacter::GetSingleton();
 		SKSE::log::trace("A press");
 		if (!menuchecker::isGameStopped())
 		{
-			poop();
-			
+			bool once = true;
+			{
+				if (once) once = false;
+				s =  OverlapSphere::Make(
+					player->Get3D(true)->GetObjectByName("NPC R Hand [RHnd]"), &OnOverlap, 6);
+					OverlapSphereManager::GetSingleton()->ShowDebugSpheres();
+			}
 		}
 		return false;
 	}
 
 	bool onDEBUGBtnPressB()
 	{
+		auto player = PlayerCharacter::GetSingleton();
 		SKSE::log::trace("B press");
-		if (!menuchecker::isGameStopped()) { PrintPlayerModelEffects(); }
+		if (!menuchecker::isGameStopped())
+		{
+			int    skips = 0;
+			float  max = 0;
+			float  min = 0;
+			double sum = 0;
+			for (auto t : times)
+			{
+				if (t > max)
+				{
+					max = t;
+				} else if (t > 0 && t < min)
+				{
+					min = t;
+				}
+				if (t > 0)
+				{
+					sum += t;
+				} else
+				{
+					skips++;
+				}
+			}
+			SKSE::log::trace(
+				"skips: {} max: {} min: {} avg: {}", skips, max, min, sum / times.size());
+			times.clear();
+		}
 		return false;
 	}
 
 	void Update()
 	{
-		auto player = PlayerCharacter::GetSingleton();
-
-		OverlapSphereManager::GetSingleton()->Update();
 		ArtAddonManager::GetSingleton()->Update();
+		times.push_back(OverlapSphereManager::GetSingleton()->Update());
 	}
 
 	void GameLoad() { auto player = RE::PlayerCharacter::GetSingleton(); }
@@ -101,9 +114,7 @@ namespace wearable_plugin
 	void StartMod()
 	{
 		menuchecker::begin();
-
 		hooks::Install();
-
 		// VR init
 		g_l_controller = g_OVRHookManager->GetVRSystem()->GetTrackedDeviceIndexForControllerRole(
 			vr::TrackedControllerRole_LeftHand);
@@ -120,17 +131,13 @@ namespace wearable_plugin
 		}
 
 		// Other Manager setup
-		vrinput::OverlapSphereManager::GetSingleton()->set_palm_offset(g_higgs_palmPosHandspace);
+		vrinput::OverlapSphereManager::GetSingleton()->SetPalmOffset(g_higgs_palmPosHandspace);
 
 		// register event sinks and handlers
-		auto equipSink = EventSink<TESEquipEvent>::GetSingleton();
-		ScriptEventSourceHolder::GetSingleton()->AddEventSink(equipSink);
-		equipSink->AddCallback(onEquipEvent);
-
 		vrinput::AddCallback(vr::k_EButton_A, onDEBUGBtnPressA, Right, Press, ButtonDown);
-		vrinput::AddCallback(vr::k_EButton_A, onDEBUGBtnReleaseA, Right, Press, ButtonUp);
-		vrinput::AddCallback(vr::k_EButton_ApplicationMenu, onDEBUGBtnPressB, Right, Press,
-			ButtonDown);
+		vrinput::AddCallback(vr::k_EButton_A, onDEBUGBtnReleaseA, Left, Press, ButtonUp);
+		vrinput::AddCallback(
+			vr::k_EButton_ApplicationMenu, onDEBUGBtnPressB, Right, Press, ButtonDown);
 	}
 
 	// handles low level button/trigger events

@@ -1,4 +1,5 @@
-#include "artaddon.h"
+#include "art_addon.h"
+
 #include "helper_game.h"
 
 namespace art_addon
@@ -8,19 +9,18 @@ namespace art_addon
 	std::shared_ptr<ArtAddon> ArtAddon::Make(const char* a_model_path, TESObjectREFR* a_target,
 		NiAVObject* a_attach_node, NiTransform& a_local)
 	{
-		auto             manager = ArtAddonManager::GetSingleton();
-		auto             art_object = manager->GetArtForm(a_model_path);
-		int              id = manager->GetNextId();
+		auto manager = ArtAddonManager::GetSingleton();
+		auto art_object = manager->GetArtForm(a_model_path);
+		int  id = manager->GetNextId();
+
 		std::scoped_lock lock(manager->objects_lock);
-		
+
 		/** Using the duration parameter of the BSTempEffect as an ID because anything < 0 has the
 		 * same effect. If another mod happens to use this library there will be ID collisions but
 		 * they are still distinguished by the unique BGSArtObject property. */
 		if (art_object && a_attach_node && a_target && a_target->IsHandleValid() &&
 			a_target->ApplyArtObject(art_object, (float)id))
 		{
-			SKSE::log::trace("created MRE: {}", id);
-
 			auto new_obj = std::shared_ptr<ArtAddon>(new ArtAddon);
 			new_obj->art_object = art_object;
 			new_obj->local = a_local;
@@ -35,8 +35,6 @@ namespace art_addon
 			return nullptr;
 		}
 	}
-
-	NiAVObject* ArtAddon::Get3D() { return root3D; }
 
 	/** Ostensibly ApplyArtObject() returns a ModelReferenceEffect handle for the model, but
 	 * it seems to return 1 in all circumstances. So instead we'll clone the created NiNode
@@ -62,7 +60,7 @@ namespace art_addon
 								{
 									addon->root3D = a_modelEffect.Get3D()->Clone();
 									addon->attach_node->AsNode()->AttachChild(addon->root3D);
-									SKSE::log::trace("deleting MRE: {}", id);
+									//SKSE::log::trace("deleting MRE: {}", id);
 									a_modelEffect.Detach();
 									addon->root3D->local = std::move(addon->local);
 								}
@@ -109,7 +107,7 @@ namespace art_addon
 		return artobject_cache[modelPath];
 	}
 
-	int ArtAddonManager::GetNextId() { return next_Id--; }
+	int ArtAddonManager::GetNextId() { return next_id--; }
 
 	ArtAddonManager::ArtAddonManager()
 	{

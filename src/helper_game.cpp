@@ -1,43 +1,41 @@
 #include "helper_game.h"
+
 #include "helper_math.h"
 
 namespace helper
 {
 	using namespace RE;
 
-	TESForm* LookupByName(FormType typeEnum, const char* name)
+	TESForm* LookupByName(FormType a_typeEnum, const char* a_name)
 	{
 		auto* data = TESDataHandler::GetSingleton();
-		auto& forms = data->GetFormArray(typeEnum);
+		auto& forms = data->GetFormArray(a_typeEnum);
 		for (auto*& form : forms)
 		{
-			if (!strcmp(form->GetName(), name))
-			{
-				return form;
-			}
+			if (!strcmp(form->GetName(), a_name)) { return form; }
 		}
 		return nullptr;
 	}
 
-	float GetAVPercent(Actor* a, ActorValue v)
+	float GetAVPercent(Actor* a_a, ActorValue a_v)
 	{
-		float current = a->AsActorValueOwner()->GetActorValue(v);
-		float base = a->AsActorValueOwner()->GetBaseActorValue(v);
-		float mod = a->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kPermanent, v) +
-		            a->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kTemporary, v);
+		float current = a_a->AsActorValueOwner()->GetActorValue(a_v);
+		float base = a_a->AsActorValueOwner()->GetBaseActorValue(a_v);
+		float mod = a_a->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kPermanent, a_v) +
+		            a_a->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kTemporary, a_v);
 		return current / (base + mod);
 	}
 
-	float GetChargePercent(Actor* a, bool isLeft)
+	float GetChargePercent(Actor* a_a, bool isLeft)
 	{
-		if (auto equipped = a->GetEquippedObject(isLeft))
+		if (auto equipped = a_a->GetEquippedObject(isLeft))
 		{
 			if (equipped->IsWeapon())
 			{
-				float current = a->AsActorValueOwner()->GetActorValue(ActorValue::kRightItemCharge);
+				float current = a_a->AsActorValueOwner()->GetActorValue(ActorValue::kRightItemCharge);
 
 				// player made items
-				if (auto entryData = a->GetEquippedEntryData(isLeft))
+				if (auto entryData = a_a->GetEquippedEntryData(isLeft))
 				{
 					for (auto& x : *(entryData->extraLists))
 					{
@@ -60,37 +58,31 @@ namespace helper
 
 	float GetGameHour()
 	{
-		if (auto c = Calendar::GetSingleton())
+		if (auto c = Calendar::GetSingleton()) { return c->GetHour(); }
+		return 0;
+	}
+
+	float GetAmmoPercent(Actor* a_a, float a_ammoCountMult)
+	{
+		if (auto ammo = a_a->GetCurrentAmmo())
 		{
-			return c->GetHour();
+			auto countmap = a_a->GetInventoryCounts();
+			if (countmap[ammo]) { return std::clamp(countmap[ammo] * a_ammoCountMult, 0.f, 100.f); }
 		}
 		return 0;
 	}
 
-	float GetAmmoPercent(Actor* a, float ammoCountMult)
+	float GetShoutCooldownPercent(Actor* a_a, float a_MaxCDTime)
 	{
-		if (auto ammo = a->GetCurrentAmmo())
-		{
-			auto countmap = a->GetInventoryCounts();
-			if (countmap[ammo])
-			{
-				return std::clamp(countmap[ammo] * ammoCountMult, 0.f, 100.f);
-			}
-		}
-		return 0;
-	}
-
-	float GetShoutCooldownPercent(Actor* a, float MaxCDTime)
-	{
-		return std::clamp(a->GetVoiceRecoveryTime() / MaxCDTime, 0.f, 100.f);
+		return std::clamp(a_a->GetVoiceRecoveryTime() / a_MaxCDTime, 0.f, 100.f);
 	}
 
 	void SetGlowMult() {}
 
-	void SetGlowColor(NiAVObject* target, NiColor* c)
+	void SetGlowColor(NiAVObject* a_target, NiColor* c)
 	{
 		auto geometry =
-			target->GetFirstGeometryOfShaderType(RE::BSShaderMaterial::Feature::kGlowMap);
+			a_target->GetFirstGeometryOfShaderType(RE::BSShaderMaterial::Feature::kGlowMap);
 		if (geometry)
 		{
 			auto shaderProp = geometry->GetGeometryRuntimeData()
@@ -99,10 +91,7 @@ namespace helper
 			if (shaderProp)
 			{
 				auto shader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProp);
-				if (shader)
-				{
-					shader->emissiveColor = c;
-				}
+				if (shader) { shader->emissiveColor = c; }
 			}
 		}
 	}
@@ -111,27 +100,21 @@ namespace helper
 	void SetSpecularColor() {}
 	void SetTintColor() {}
 
-	void CastSpellInstant(Actor* src, Actor* target, SpellItem* spell)
+	void CastSpellInstant(Actor* src, Actor* a_target, SpellItem* a_spell)
 	{
-		if (src && target && spell)
+		if (src && a_target && a_spell)
 		{
 			auto caster = src->GetMagicCaster(MagicSystem::CastingSource::kInstant);
-			if (caster)
-			{
-				caster->CastSpellImmediate(spell, false, target, 1.0, false, 1.0, src);
-			}
+			if (caster) { caster->CastSpellImmediate(a_spell, false, a_target, 1.0, false, 1.0, src); }
 		}
 	}
 
-	void Dispel(Actor* src, Actor* target, SpellItem* spell)
+	void Dispel(Actor* src, Actor* a_target, SpellItem* a_spell)
 	{
-		if (src && target && spell)
+		if (src && a_target && a_spell)
 		{
 			auto handle = src->GetHandle();
-			if (handle)
-			{
-				target->GetMagicTarget()->DispelEffect(spell, handle);
-			}
+			if (handle) { a_target->GetMagicTarget()->DispelEffect(a_spell, handle); }
 		}
 	}
 
@@ -147,7 +130,8 @@ namespace helper
 				{
 					if (a_modelEffect.artObject)
 					{
-						SKSE::log::debug("MRE:{}  AO:{}", (void*)&a_modelEffect, (void*)a_modelEffect.artObject);
+						SKSE::log::debug(
+							"MRE:{}  AO:{}", (void*)&a_modelEffect, (void*)a_modelEffect.artObject);
 						player++;
 					} else
 					{

@@ -6,11 +6,12 @@
 #pragma once
 
 #include <chrono>
-#include <future>
 #include <memory>
 
 namespace art_addon
 {
+	class ArtAddon;
+	using ArtAddonPtr = std::shared_ptr<ArtAddon>;
 	class ArtAddon
 	{
 		friend class ArtAddonManager;
@@ -25,38 +26,38 @@ namespace art_addon
          * attachNode:  parent node for the new 3D, must be a 3rd person node for the player
          * local:       transform relative to the attachNode
 		 */
-		static std::shared_ptr<ArtAddon> Make(const char* a_model_path, RE::TESObjectREFR* a_target,
+		static ArtAddonPtr Make(const char* a_model_path, RE::TESObjectREFR* a_target,
 			RE::NiAVObject* a_attach_node, RE::NiTransform& a_local);
-
-		/** Returns: Pointer to the attached NiAVObject. nullptr if initialization hasn't finished. */
-		RE::NiAVObject* Get3D();
 
 		~ArtAddon()
 		{
 			if (root3D) { root3D->parent->DetachChild(root3D); }
 		}
 
-	private:
-		RE::NiAVObject*    root3D = nullptr;
-		RE::TESObjectREFR* target = nullptr;
-		RE::BGSArtObject*  art_object = nullptr;
-		RE::NiAVObject*    attach_node = nullptr;
-		RE::NiTransform    local;
+		/** Returns: Pointer to the attached NiAVObject. nullptr if initialization hasn't finished. */
+		RE::NiAVObject* const Get3D() { return root3D; }
 
+	private:
 		ArtAddon() = default;
 		ArtAddon(const ArtAddon&) = delete;
 		ArtAddon(ArtAddon&&) = delete;
 		ArtAddon& operator=(const ArtAddon&) = delete;
 		ArtAddon& operator=(ArtAddon&&) = delete;
+
+		RE::NiAVObject*    root3D = nullptr;
+		RE::TESObjectREFR* target = nullptr;
+		RE::BGSArtObject*  art_object = nullptr;
+		RE::NiAVObject*    attach_node = nullptr;
+		RE::NiTransform    local;
 	};
-	using ArtAddonPtr = std::shared_ptr<ArtAddon>;
 
 	class ArtAddonManager
 	{
 		friend ArtAddon;
 
 	public:
-		/** Must be called regularly e.g. in PlayerCharacter::Update() */
+		/** Must be called every frame. It only takes 1 frame to create all the models and remove 
+		 * them from the processing queue so this will usually do nothing. */
 		void Update();
 
 		static ArtAddonManager* GetSingleton()
@@ -66,21 +67,21 @@ namespace art_addon
 		}
 
 	private:
-		std::unordered_map<int, std::weak_ptr<ArtAddon>>   new_objects;
-		std::mutex                                         objects_lock;
-		std::unordered_map<const char*, RE::BGSArtObject*> artobject_cache;
-		RE::BGSArtObject*                                  base_artobject;
-		int                                                next_Id = -2;
-
-		RE::BGSArtObject* GetArtForm(const char* a_modelPath);
-		int               GetNextId();
-
 		ArtAddonManager();
 		~ArtAddonManager() = default;
 		ArtAddonManager(const ArtAddonManager&) = delete;
 		ArtAddonManager(ArtAddonManager&&) = delete;
 		ArtAddonManager& operator=(const ArtAddonManager&) = delete;
 		ArtAddonManager& operator=(ArtAddonManager&&) = delete;
+
+		RE::BGSArtObject* GetArtForm(const char* a_modelPath);
+		int               GetNextId();
+
+		std::unordered_map<int, std::weak_ptr<ArtAddon>>   new_objects;
+		std::mutex                                         objects_lock;
+		std::unordered_map<const char*, RE::BGSArtObject*> artobject_cache;
+		RE::BGSArtObject*                                  base_artobject;
+		int                                                next_id = -2;
 	};
 
 }

@@ -12,9 +12,11 @@ namespace helper
 	// get rotation about Z axis while ignoring other rotations
 	inline float GetAzimuth(NiMatrix3& rot)
 	{
-		if (std::abs(rot.entry[2][1]) < 0.9995f) {
+		if (std::abs(rot.entry[2][1]) < 0.9995f)
+		{
 			return std::atan2(rot.entry[0][1], rot.entry[1][1]);
-		} else {
+		} else
+		{
 			return -1.0f * std::atan2(rot.entry[1][0], rot.entry[0][0]);
 		}
 	}
@@ -31,10 +33,7 @@ namespace helper
 	{
 		return vec.x * vec.x + vec.y * vec.y + vec.z * vec.z;
 	}
-	inline float VectorLength(const NiPoint3& vec)
-	{
-		return sqrtf(VectorLengthSquared(vec));
-	}
+	inline float VectorLength(const NiPoint3& vec) { return sqrtf(VectorLengthSquared(vec)); }
 	inline float DotProductSafe(const NiPoint3& vec1, const NiPoint3& vec2)
 	{
 		return std::clamp(vec1.Dot(vec2), -1.f, 1.f);
@@ -81,9 +80,8 @@ namespace helper
 		RE::NiPoint3 axis = src.UnitCross(dest);
 
 		if (axis.Length() < std::numeric_limits<float>::epsilon())
-        {   // Handle the case where the vectors are collinear			
-			axis = src.UnitCross(RE::NiPoint3(std::rand() / RAND_MAX,
-				std::rand() / RAND_MAX, 0));
+		{  // Handle the case where the vectors are collinear
+			axis = src.UnitCross(RE::NiPoint3(std::rand() / RAND_MAX, std::rand() / RAND_MAX, 0));
 		}
 		auto angle = std::acos(helper::DotProductSafe(src, dest));
 
@@ -117,8 +115,7 @@ namespace helper
 		matrix.entry[2][2] = 1 - 2 * (xx + yy);
 	}
 
-	inline void slerpQuat(float interp, NiQuaternion& q1, NiQuaternion& q2,
-		NiMatrix3& out)
+	inline void slerpQuat(float interp, NiQuaternion& q1, NiQuaternion& q2, NiMatrix3& out)
 	{
 		// Convert mat1 to a quaternion
 		float q1w = q1.w;
@@ -134,7 +131,8 @@ namespace helper
 
 		// Take the dot product, inverting q2 if it is negative
 		double dot = q1w * q2w + q1x * q2x + q1y * q2y + q1z * q2z;
-		if (dot < 0.0f) {
+		if (dot < 0.0f)
+		{
 			q2w = -q2w;
 			q2x = -q2x;
 			q2y = -q2y;
@@ -144,7 +142,8 @@ namespace helper
 
 		// Linearly interpolate and normalize if the dot product is too close to 1
 		float q3w, q3x, q3y, q3z;
-		if (dot > 0.9995) {
+		if (dot > 0.9995)
+		{
 			q3w = q1w + interp * (q2w - q1w);
 			q3x = q1x + interp * (q2x - q1x);
 			q3y = q1y + interp * (q2y - q1y);
@@ -156,17 +155,14 @@ namespace helper
 			q3z /= length;
 
 			// Otherwise do a spherical linear interpolation normally
-		} else {
-			float theta_0 =
-				acosf(dot);  // theta_0 = angle between input vectors
-			float theta =
-				theta_0 * interp;  // theta = angle between q1 and result
+		} else
+		{
+			float theta_0 = acosf(dot);         // theta_0 = angle between input vectors
+			float theta = theta_0 * interp;     // theta = angle between q1 and result
 			float sin_theta = sinf(theta);      // compute this value only once
 			float sin_theta_0 = sinf(theta_0);  // compute this value only once
-			float s0 =
-				cosf(theta) -
-				dot * sin_theta /
-					sin_theta_0;  // == sin(theta_0 - theta) / sin(theta_0)
+			float s0 = cosf(theta) -
+			           dot * sin_theta / sin_theta_0;  // == sin(theta_0 - theta) / sin(theta_0)
 			float s1 = sin_theta / sin_theta_0;
 			q3w = (s0 * q1w) + (s1 * q2w);
 			q3x = (s0 * q1x) + (s1 * q2x);
