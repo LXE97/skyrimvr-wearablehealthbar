@@ -8,8 +8,8 @@ namespace vrinput
 	const bool OverlapSphere::is_overlapping(bool isLeft) { return overlap_state[isLeft]; };
 
 	std::shared_ptr<OverlapSphere> OverlapSphere::Make(NiAVObject* a_attach_to,
-		OverlapCallback a_callback, float a_radius, float a_max_angle_deg,
-		const NiPoint3& a_offset, const NiPoint3& a_normal)
+		OverlapCallback a_callback, float a_radius, float a_max_angle_deg, const NiPoint3& a_offset,
+		const NiPoint3& a_normal)
 	{
 		std::scoped_lock lock(OverlapSphereManager::GetSingleton()->process_lock);
 
@@ -37,12 +37,7 @@ namespace vrinput
 			NiAVObject* controllers[2]{ player->Get3D(true)->GetObjectByName(
 											kControllerNodeName[0]),
 				player->Get3D(true)->GetObjectByName(kControllerNodeName[1]) };
-			auto third_person_right = player->Get3D(false)->GetObjectByName(kControllerNodeName[0]);
-			if (third_person_right->world.translate.GetSquaredDistance(
-					controllers[0]->world.translate) > ktracking_error_threshold)
-			{
-				return 0.0f;
-			}
+
 			std::scoped_lock lock(process_lock);
 
 			NiPoint3 sphere_world;
@@ -76,8 +71,8 @@ namespace vrinput
 									helper::VectorNormalized(node->world.rotate * sphere->normal);
 								auto palm_normal_worldspace = helper::VectorNormalized(
 									controllers[isLeft]->world.rotate * kHandPalmNormal);
-								angle = std::acos(helper::DotProductSafe(normal_worldspace,
-									palm_normal_worldspace));
+								angle = std::acos(helper::DotProductSafe(
+									normal_worldspace, palm_normal_worldspace));
 							}
 
 							// entered sphere
@@ -184,7 +179,13 @@ namespace vrinput
 		{
 			t.rotate = helper::RotateBetweenVectors(NiPoint3(1.0, 0, 0), a_s.normal);
 		}
-		return ArtAddon::Make(kModelPath, player->AsReference(), a_s.attach_node, t);
+		if (auto attach = player->Get3D(false)->GetObjectByName(a_s.attach_node->name))
+		{
+			return ArtAddon::Make(kModelPath, player->AsReference(), attach, t);
+		} else
+		{
+			return nullptr;
+		}
 	}
 
 	int OverlapSphereManager::GetNextId() { return nextId++; }

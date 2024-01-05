@@ -1,7 +1,7 @@
 ---
 ColumnLimit: 100
 AccessModifierOffset: -4
-AlignAfterOpenBracket: DontAlign
+AlignAfterOpenBracket: false 
 AlignConsecutiveAssignments: 'false'
 AlignConsecutiveBitFields: 'false'
 AlignConsecutiveDeclarations: 'true'
@@ -9,7 +9,7 @@ AlignConsecutiveMacros: 'false'
 AlignEscapedNewlines: Left
 AlignOperands: Align
 AlignTrailingComments: 'true'
-AllowAllArgumentsOnNextLine: 'false'
+AllowAllArgumentsOnNextLine: 'true'
 AllowAllConstructorInitializersOnNextLine: 'false'
 AllowAllParametersOfDeclarationOnNextLine: 'false'
 AllowShortBlocksOnASingleLine: Always
@@ -50,7 +50,7 @@ BreakConstructorInitializers: AfterColon
 BreakInheritanceList: AfterColon
 BreakStringLiterals: 'true'
 CompactNamespaces: 'false'
-ConstructorInitializerAllOnOneLineOrOnePerLine: 'false'
+ConstructorInitializerAllOnOneLineOrOnePerLine: 'true'
 ConstructorInitializerIndentWidth: 4
 ContinuationIndentWidth: 4
 Cpp11BracedListStyle: 'false'
@@ -58,7 +58,7 @@ DeriveLineEnding: 'true'
 DerivePointerAlignment: 'false'
 DisableFormat: 'false'
 FixNamespaceComments: 'false'
-IncludeBlocks: Preserve
+IncludeBlocks: Regroup 
 IndentCaseBlocks: 'true'
 IndentCaseLabels: 'false'
 IndentExternBlock: Indent
