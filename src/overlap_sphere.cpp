@@ -58,7 +58,7 @@ namespace vrinput
 
 						// Test collision.
 						bool changed = false;
-						for (bool isLeft : { true })
+						for (bool isLeft : { false, true })
 						{
 							float dist = sphere_world.GetSquaredDistance(
 								controllers[isLeft]->world.translate +

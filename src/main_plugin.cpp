@@ -15,6 +15,7 @@ namespace wearable_plugin
 	using namespace RE;
 	using namespace helper;
 	using namespace art_addon;
+	using namespace wearable;
 
 	// constants
 	constexpr FormID g_playerID = 0x14;
@@ -22,8 +23,6 @@ namespace wearable_plugin
 	SKSE::detail::SKSETaskInterface* g_task;
 	OpenVRHookManagerAPI*            g_OVRHookManager;
 	PapyrusVR::VRManagerAPI*         g_VRManager;
-	vr::TrackedDeviceIndex_t         g_l_controller;
-	vr::TrackedDeviceIndex_t         g_r_controller;
 
 	// DEBUG
 	int32_t  g_debugLHandDrawSphere;
@@ -36,65 +35,45 @@ namespace wearable_plugin
 	vr::EVRButtonId    g_config_PrimaryBtn = vr::k_EButton_Grip;
 	std::vector<float> times;
 
-	void OnOverlap(const OverlapEvent& e) { SKSE::log::trace("overlap event {}", e.id);
-	 }
-OverlapSpherePtr s;
-	bool onDEBUGBtnReleaseA()
+	void OnOverlap(const vrinput::OverlapEvent& e) {}
+
+	std::shared_ptr<Wearable>      w;
+	OverlapSpherePtr huh;
+
+	bool OnDEBUGBtnReleaseA()
 	{
-		SKSE::log::trace("A release ");
-		if (!menuchecker::isGameStopped()) {
-			s.reset();
-		}
+		SKSE::log::trace("A left ");
+		if (!menuchecker::isGameStopped()) {}
 		return false;
 	}
 
-	bool onDEBUGBtnPressA()
+	bool OnDEBUGBtnPressA()
 	{
 		auto player = PlayerCharacter::GetSingleton();
-		SKSE::log::trace("A press");
+		SKSE::log::trace("A right");
 		if (!menuchecker::isGameStopped())
 		{
 			bool once = true;
 			{
-				if (once) once = false;
-				s =  OverlapSphere::Make(
-					player->Get3D(true)->GetObjectByName("NPC R Hand [RHnd]"), &OnOverlap, 6);
-					OverlapSphereManager::GetSingleton()->ShowDebugSpheres();
+				NiTransform                   t;
+				std::vector<std::string>      names = { "meter1" };
+				std::vector<Meter::MeterType> av = { Meter::MeterType::kHealth };
+
+				w = std::make_shared<Meter>("armor/SoulGauge/Mara-attach.nif",
+					player->Get3D(false)->GetObjectByName("NPC L Hand [LHnd]"), t, av, names);
+					WearableManager::GetSingleton()->Register(w);
 			}
 		}
 		return false;
 	}
 
-	bool onDEBUGBtnPressB()
+	bool OnDEBUGBtnPressB()
 	{
 		auto player = PlayerCharacter::GetSingleton();
 		SKSE::log::trace("B press");
 		if (!menuchecker::isGameStopped())
 		{
-			int    skips = 0;
-			float  max = 0;
-			float  min = 0;
-			double sum = 0;
-			for (auto t : times)
-			{
-				if (t > max)
-				{
-					max = t;
-				} else if (t > 0 && t < min)
-				{
-					min = t;
-				}
-				if (t > 0)
-				{
-					sum += t;
-				} else
-				{
-					skips++;
-				}
-			}
-			SKSE::log::trace(
-				"skips: {} max: {} min: {} avg: {}", skips, max, min, sum / times.size());
-			times.clear();
+			OverlapSphereManager::GetSingleton()->ShowDebugSpheres();
 		}
 		return false;
 	}
@@ -102,7 +81,9 @@ OverlapSpherePtr s;
 	void Update()
 	{
 		ArtAddonManager::GetSingleton()->Update();
-		times.push_back(OverlapSphereManager::GetSingleton()->Update());
+		OverlapSphereManager::GetSingleton()->Update();
+		static int c = 0;
+		if (c++ % 1 == 0) { WearableManager::GetSingleton()->Update(); }
 	}
 
 	void GameLoad() { auto player = RE::PlayerCharacter::GetSingleton(); }
@@ -115,11 +96,7 @@ OverlapSpherePtr s;
 	{
 		menuchecker::begin();
 		hooks::Install();
-		// VR init
-		g_l_controller = g_OVRHookManager->GetVRSystem()->GetTrackedDeviceIndexForControllerRole(
-			vr::TrackedControllerRole_LeftHand);
-		g_r_controller = g_OVRHookManager->GetVRSystem()->GetTrackedDeviceIndexForControllerRole(
-			vr::TrackedControllerRole_RightHand);
+
 		RegisterVRInputCallback();
 
 		// HIGGS setup
@@ -134,55 +111,10 @@ OverlapSpherePtr s;
 		vrinput::OverlapSphereManager::GetSingleton()->SetPalmOffset(g_higgs_palmPosHandspace);
 
 		// register event sinks and handlers
-		vrinput::AddCallback(vr::k_EButton_A, onDEBUGBtnPressA, Right, Press, ButtonDown);
-		vrinput::AddCallback(vr::k_EButton_A, onDEBUGBtnReleaseA, Left, Press, ButtonUp);
+		vrinput::AddCallback(vr::k_EButton_A, OnDEBUGBtnPressA, Right, Press, ButtonDown);
+		vrinput::AddCallback(vr::k_EButton_A, OnDEBUGBtnReleaseA, Left, Press, ButtonUp);
 		vrinput::AddCallback(
-			vr::k_EButton_ApplicationMenu, onDEBUGBtnPressB, Right, Press, ButtonDown);
-	}
-
-	// handles low level button/trigger events
-	bool ControllerInput_CB(vr::TrackedDeviceIndex_t unControllerDeviceIndex,
-		const vr::VRControllerState_t* pControllerState, uint32_t unControllerStateSize,
-		vr::VRControllerState_t* pOutputControllerState)
-	{
-		// save last controller input to only do processing on button changes
-		static uint64_t prev_Pressed[2] = {};
-		static uint64_t prev_Touched[2] = {};
-
-		// need to remember the last output sent to the game in order to maintain input blocking
-		static uint64_t prev_Pressed_out[2] = {};
-		static uint64_t prev_Touched_out[2] = {};
-
-		if (pControllerState && !menuchecker::isGameStopped())
-		{
-			bool isLeft = unControllerDeviceIndex == g_l_controller;
-			if (isLeft || unControllerDeviceIndex == g_r_controller)
-			{
-				uint64_t pressedChange = prev_Pressed[isLeft] ^ pControllerState->ulButtonPressed;
-				uint64_t touchedChange = prev_Touched[isLeft] ^ pControllerState->ulButtonTouched;
-				if (pressedChange)
-				{
-					vrinput::processButtonChanges(pressedChange, pControllerState->ulButtonPressed,
-						isLeft, false, pOutputControllerState);
-					prev_Pressed[isLeft] = pControllerState->ulButtonPressed;
-					prev_Pressed_out[isLeft] = pOutputControllerState->ulButtonPressed;
-				} else
-				{
-					pOutputControllerState->ulButtonPressed = prev_Pressed_out[isLeft];
-				}
-				if (touchedChange)
-				{
-					vrinput::processButtonChanges(touchedChange, pControllerState->ulButtonTouched,
-						isLeft, true, pOutputControllerState);
-					prev_Touched[isLeft] = pControllerState->ulButtonTouched;
-					prev_Touched_out[isLeft] = pOutputControllerState->ulButtonTouched;
-				} else
-				{
-					pOutputControllerState->ulButtonTouched = prev_Touched_out[isLeft];
-				}
-			}
-		}
-		return true;
+			vr::k_EButton_ApplicationMenu, OnDEBUGBtnPressB, Right, Press, ButtonDown);
 	}
 
 	// Register SkyrimVRTools callback
@@ -195,7 +127,14 @@ OverlapSpherePtr s;
 			{
 				SKSE::log::info("Successfully requested OpenVRHookManagerAPI.");
 				// TODO: set up haptics: InitSystem(g_OVRHookManager->GetVRSystem());
-				g_OVRHookManager->RegisterControllerStateCB(ControllerInput_CB);
+
+				vrinput::g_leftcontroller =
+					g_OVRHookManager->GetVRSystem()->GetTrackedDeviceIndexForControllerRole(
+						vr::TrackedControllerRole_LeftHand);
+				vrinput::g_rightcontroller =
+					g_OVRHookManager->GetVRSystem()->GetTrackedDeviceIndexForControllerRole(
+						vr::TrackedControllerRole_RightHand);
+				g_OVRHookManager->RegisterControllerStateCB(vrinput::ControllerInput_CB);
 			}
 		}
 	}

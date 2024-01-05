@@ -15,6 +15,9 @@ namespace vrinput
 
 	using OverlapCallback = void (*)(const OverlapEvent& e);
 
+	class OverlapSphere;
+	using OverlapSpherePtr = std::shared_ptr<OverlapSphere>;
+
 	class OverlapSphere
 	{
 		friend class OverlapSphereManager;
@@ -28,6 +31,7 @@ namespace vrinput
 		~OverlapSphere() = default;
 
 		const bool is_overlapping(bool a_isLeft);
+		const int  GetId() { return id; }
 
 	private:
 		OverlapSphere() = default;
@@ -46,7 +50,6 @@ namespace vrinput
 		std::shared_ptr<art_addon::ArtAddon> visible_debug_sphere;
 		int                                  id;
 	};
-	using OverlapSpherePtr = std::shared_ptr<OverlapSphere>;
 
 	class OverlapSphereManager
 	{
