@@ -10,17 +10,26 @@ namespace wearable
 	{
 		auto manager = WearableManager::GetSingleton();
 
-		static auto last_tap_time = std::chrono::steady_clock::now();
-
-		auto tap_diff = std::chrono::duration_cast<std::chrono::seconds>(
-			std::chrono::steady_clock::now() - last_tap_time);
-
-		if (tap_diff.count() < manager->GetConfig().enter_dressing_tap_delay_max &&
-			tap_diff.count() > manager->GetConfig().enter_dressing_tap_delay_min)
+		if (manager->GetState() == DressingState::kNone)
 		{
-			manager->TransitionState(DressingState::kWait);
-		}
+			
+			static auto last_tap_time = std::chrono::steady_clock::now();
+SKSE::log::trace("grab button ");
+			auto tap_diff = std::chrono::duration_cast<std::chrono::seconds>(
+				std::chrono::steady_clock::now() - last_tap_time);
 
+			if (tap_diff.count() < manager->config.enter_dressing_tap_delay_max &&
+				tap_diff.count() > manager->config.enter_dressing_tap_delay_min)
+			{
+				manager->dressingmode_selected_index =
+					manager->FindWearableWithOverlapID(manager->dressingmode_hovered_sphere_id);
+				manager->TransitionState(DressingState::kWait);
+			}
+		} else
+		{
+			manager->dressingmode_selected_index =
+					manager->FindWearableWithOverlapID(manager->dressingmode_hovered_sphere_id);
+		}
 		return false;
 	}
 
@@ -29,13 +38,14 @@ namespace wearable
 		auto manager = WearableManager::GetSingleton();
 		if (e.entered)
 		{
-			manager->SetSelectedIndex(manager->FindWearableWithOverlapID(e.id));
+			manager->dressingmode_hovered_sphere_id = e.id;
+			SKSE::log::trace("overlap enter");
 
-			vrinput::AddCallback(manager->GetConfig().enter_dressing_mode, WearableGrabHandler,
+			vrinput::AddCallback(manager->config.enter_dressing_mode, WearableGrabHandler,
 				e.isLeft, Press, ButtonDown);
 		} else
 		{
-			vrinput::RemoveCallback(manager->GetConfig().enter_dressing_mode, WearableGrabHandler,
+			vrinput::RemoveCallback(manager->config.enter_dressing_mode, WearableGrabHandler,
 				e.isLeft, Press, ButtonDown);
 		}
 	}
@@ -59,7 +69,6 @@ namespace wearable
 						switch (dressingmode_state)
 						{
 						case DressingState::kTranslate:
-
 							break;
 						case DressingState::kScale:
 							break;

@@ -1,3 +1,4 @@
+#define PROFILE 1
 #include "main_plugin.h"
 
 #include "helper_game.h"
@@ -37,13 +38,13 @@ namespace wearable_plugin
 
 	void OnOverlap(const vrinput::OverlapEvent& e) {}
 
-	std::shared_ptr<Wearable>      w;
-	OverlapSpherePtr huh;
+	std::shared_ptr<Wearable> w;
+	OverlapSpherePtr          huh;
 
 	bool OnDEBUGBtnReleaseA()
 	{
 		SKSE::log::trace("A left ");
-		if (!menuchecker::isGameStopped()) {}
+		if (!menuchecker::isGameStopped()) { auto player = RE::PlayerCharacter::GetSingleton(); }
 		return false;
 	}
 
@@ -61,7 +62,7 @@ namespace wearable_plugin
 
 				w = std::make_shared<Meter>("armor/SoulGauge/Mara-attach.nif",
 					player->Get3D(false)->GetObjectByName("NPC L Hand [LHnd]"), t, av, names);
-					WearableManager::GetSingleton()->Register(w);
+				WearableManager::GetSingleton()->Register(w);
 			}
 		}
 		return false;
@@ -80,13 +81,33 @@ namespace wearable_plugin
 
 	void Update()
 	{
+#ifdef PROFILE
+		static std::vector<long> update_times;
+
+		auto start = std::chrono::steady_clock::now();
+#endif
 		ArtAddonManager::GetSingleton()->Update();
-		OverlapSphereManager::GetSingleton()->Update();
+
 		static int c = 0;
 		if (c++ % 1 == 0) { WearableManager::GetSingleton()->Update(); }
+
+#ifdef PROFILE
+		auto end = std::chrono::steady_clock::now();
+		update_times.push_back(
+			std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
+
+		if (update_times.size() > 800)
+		{
+			auto   max = *std::max_element(update_times.begin(), update_times.end());
+			auto   sum = std::accumulate(update_times.begin(), update_times.end(), 0);
+			double avg = sum / update_times.size();
+			SKSE::log::trace("update ns avg: {} worst: {}", avg, max);
+			update_times.clear();
+		}
+#endif
 	}
 
-	void GameLoad() { auto player = RE::PlayerCharacter::GetSingleton(); }
+	void GameLoad() {}
 
 	void PreGameLoad() {}
 
@@ -109,6 +130,17 @@ namespace wearable_plugin
 
 		// Other Manager setup
 		vrinput::OverlapSphereManager::GetSingleton()->SetPalmOffset(g_higgs_palmPosHandspace);
+
+		// TODO: workaround for problem with accessing post-VRIK update third person skeleton
+		std::thread p1([]() {
+			auto man = vrinput::OverlapSphereManager::GetSingleton();
+			while (1)
+			{
+				man->Update();
+				std::this_thread::sleep_for(std::chrono::milliseconds(20));
+			}
+		});
+		p1.detach();
 
 		// register event sinks and handlers
 		vrinput::AddCallback(vr::k_EButton_A, OnDEBUGBtnPressA, Right, Press, ButtonDown);

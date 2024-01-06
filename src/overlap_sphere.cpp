@@ -26,97 +26,103 @@ namespace vrinput
 		return new_obj;
 	}
 
-	float OverlapSphereManager::Update()
+	void OverlapSphereManager::Update()
 	{
-		constexpr float ktracking_error_threshold = 4.0f;
-		auto            player = PlayerCharacter::GetSingleton();
-		if (player->Get3D(true))
+		constexpr float ktracking_error_threshold = 1.0f;
+
+		auto player = PlayerCharacter::GetSingleton();
+		if (player && player->Get3D(true))
 		{
-			auto start = std::chrono::steady_clock::now();
 			// check difference between 1st person and 3rd person nodes
-			NiAVObject* controllers[2]{ player->Get3D(true)->GetObjectByName(
+			NiAVObject* controllers[2]{ player->Get3D(false)->GetObjectByName(
 											kControllerNodeName[0]),
-				player->Get3D(true)->GetObjectByName(kControllerNodeName[1]) };
+				player->Get3D(false)->GetObjectByName(kControllerNodeName[1]) };
 
-			std::scoped_lock lock(process_lock);
-
-			NiPoint3 sphere_world;
-			for (auto& wp : process_list)
+			if (auto firstpersoncheck =
+					player->Get3D(true)->GetObjectByName(kControllerNodeName[0]))
 			{
-				if (auto sphere = wp.lock())
+				if (firstpersoncheck->world.translate.GetSquaredDistance(
+						controllers[0]->world.translate) < ktracking_error_threshold)
 				{
-					if (auto node = sphere->attach_node)
+					NiPoint3 sphere_world;
+					for (auto& wp : process_list)
 					{
-						if (sphere->local_position != NiPoint3::Zero())
+						if (auto sphere = wp.lock())
 						{
-							sphere_world =
-								node->world.translate + node->world.rotate * sphere->local_position;
-						} else
-						{
-							sphere_world = node->world.translate;
-						}
-
-						// Test collision.
-						bool changed = false;
-						for (bool isLeft : { false, true })
-						{
-							float dist = sphere_world.GetSquaredDistance(
-								controllers[isLeft]->world.translate +
-								controllers[isLeft]->world.rotate * palm_offset);
-
-							float angle = 0.0f;
-							if (sphere->normal != NiPoint3::Zero() && sphere->max_angle)
+							if (auto node = sphere->attach_node)
 							{
-								auto normal_worldspace =
-									helper::VectorNormalized(node->world.rotate * sphere->normal);
-								auto palm_normal_worldspace = helper::VectorNormalized(
-									controllers[isLeft]->world.rotate * kHandPalmNormal);
-								angle = std::acos(helper::DotProductSafe(
-									normal_worldspace, palm_normal_worldspace));
-							}
-
-							// entered sphere
-							if (dist <= sphere->squared_radius && angle <= sphere->max_angle &&
-								!sphere->overlap_state[isLeft])
-							{
-								sphere->overlap_state[isLeft] = true;
-								changed = SendEvent(*sphere, true, isLeft);
-							}  // use hysteresis on exit threshold
-							else if ((dist > sphere->squared_radius + kHysteresis ||
-										 angle > sphere->max_angle + kHysteresisAngular) &&
-									 sphere->overlap_state[isLeft])
-							{
-								sphere->overlap_state[isLeft] = false;
-								changed = SendEvent(*sphere, false, isLeft);
-							}
-
-							// Reflect both collision states in sphere color
-							if (changed && draw_spheres && sphere->visible_debug_sphere)
-							{
-								changed = false;
-
-								if (auto visible_node = sphere->visible_debug_sphere->Get3D())
+								if (sphere->local_position != NiPoint3::Zero())
 								{
-									if (sphere->overlap_state[0] || sphere->overlap_state[1])
+									sphere_world = node->world.translate +
+									               node->world.rotate * sphere->local_position;
+								} else
+								{
+									sphere_world = node->world.translate;
+								}
+
+								// Test collision.
+								bool changed = false;
+								for (bool isLeft : { false, true })
+								{
+									float dist = sphere_world.GetSquaredDistance(
+										controllers[isLeft]->world.translate +
+										controllers[isLeft]->world.rotate * palm_offset);
+
+									float angle = 0.0f;
+									if (sphere->normal != NiPoint3::Zero() && sphere->max_angle)
 									{
-										helper::SetGlowColor(visible_node, on);
-									} else if (!sphere->overlap_state[0] &&
-											   !sphere->overlap_state[1])
+										auto normal_worldspace = helper::VectorNormalized(
+											node->world.rotate * sphere->normal);
+										auto palm_normal_worldspace = helper::VectorNormalized(
+											controllers[isLeft]->world.rotate * kHandPalmNormal);
+										angle = std::acos(helper::DotProductSafe(
+											normal_worldspace, palm_normal_worldspace));
+									}
+
+									// entered sphere
+									if (dist <= sphere->squared_radius &&
+										angle <= sphere->max_angle &&
+										!sphere->overlap_state[isLeft])
 									{
-										helper::SetGlowColor(visible_node, off_);
+										sphere->overlap_state[isLeft] = true;
+										changed = SendEvent(*sphere, true, isLeft);
+									}  // use hysteresis on exit threshold
+									else if ((dist > sphere->squared_radius + kHysteresis ||
+												 angle > sphere->max_angle + kHysteresisAngular) &&
+											 sphere->overlap_state[isLeft])
+									{
+										sphere->overlap_state[isLeft] = false;
+										changed = SendEvent(*sphere, false, isLeft);
+									}
+
+									// Reflect both collision states in sphere color
+									if (changed && draw_spheres && sphere->visible_debug_sphere)
+									{
+										changed = false;
+
+										if (auto visible_node =
+												sphere->visible_debug_sphere->Get3D())
+										{
+											if (sphere->overlap_state[0] ||
+												sphere->overlap_state[1])
+											{
+												helper::SetGlowColor(visible_node, on);
+											} else if (!sphere->overlap_state[0] &&
+													   !sphere->overlap_state[1])
+											{
+												helper::SetGlowColor(visible_node, off_);
+											}
+										}
 									}
 								}
 							}
+						} else
+						{  // expired ptr
 						}
 					}
-				} else
-				{  // expired ptr
 				}
 			}
-			auto end = std::chrono::steady_clock::now();
-			return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 		}
-		return 0;
 	}
 
 	void OverlapSphereManager::ShowDebugSpheres()

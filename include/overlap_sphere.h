@@ -62,10 +62,10 @@ namespace vrinput
 			return &singleton;
 		}
 
-		float Update();
-		void  ShowDebugSpheres();
-		void  HideDebugSpheres();
-		void  SetPalmOffset(const RE::NiPoint3& a_offset);
+		void Update();
+		void ShowDebugSpheres();
+		void HideDebugSpheres();
+		void SetPalmOffset(const RE::NiPoint3& a_offset);
 
 	private:
 		static constexpr float        kHysteresis = 20.f;
