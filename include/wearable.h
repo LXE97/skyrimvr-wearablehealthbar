@@ -23,7 +23,7 @@ namespace wearable
 	{
 		struct Config
 		{
-			float           overlap_angle = 45.f;
+			float           overlap_angle = 0.f;
 			float           overlap_radius = 3.f;
 			float           movement_scale = 1.0f;
 			float           smoothing = 1.0f;
@@ -43,9 +43,6 @@ namespace wearable
 			return &singleton;
 		}
 
-		static bool WearableGrabHandler();
-		static void WearableOverlapHandler(const vrinput::OverlapEvent& e);
-
 		/** Must be called by main plugin */
 		void Update();
 
@@ -55,13 +52,19 @@ namespace wearable
 
 		Config&             GetConfig() { return config; }
 		DressingState const GetState() { return dressingmode_state; }
-		void                SetSelectedIndex(int a_index) { dressingmode_selected_index = a_index; }
 		int                 FindWearableWithOverlapID(int a_id);
 
 	private:
+		static constexpr const RE::FormID shader_id = 0x6F00;
+		static constexpr const char*      higgs_esp = "higgs_vr.esp";
+
+		static bool WearableGrabHandler();
+		static void WearableOverlapHandler(const vrinput::OverlapEvent& e);
+
 		std::vector<std::weak_ptr<Wearable>> managed_objects;
 		std::mutex                           managed_objects_lock;
 		Config                               config;
+		RE::TESEffectShader*                 shader;
 		DressingState                        dressingmode_state = DressingState::kNone;
 		RE::NiTransform                      dressingmode_initial;
 		bool                                 dressingmode_active_isLeft = false;
@@ -89,7 +92,6 @@ namespace wearable
 
 		art_addon::ArtAddonPtr    model = nullptr;
 		vrinput::OverlapSpherePtr interactable = nullptr;
-		
 
 		RE::NiAVObject* attach_node;
 		RE::NiTransform local;
