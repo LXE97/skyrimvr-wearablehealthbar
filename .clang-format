@@ -7,7 +7,7 @@ AlignConsecutiveBitFields: 'false'
 AlignConsecutiveDeclarations: 'true'
 AlignConsecutiveMacros: 'false'
 AlignEscapedNewlines: Left
-AlignOperands: Align
+AlignOperands: false
 AlignTrailingComments: 'true'
 AllowAllArgumentsOnNextLine: 'true'
 AllowAllConstructorInitializersOnNextLine: 'false'
@@ -36,7 +36,7 @@ BraceWrapping:
     AfterUnion: 'true'
     AfterExternBlock: 'true'
     BeforeCatch: 'false'
-    BeforeElse: 'false'
+    BeforeElse: 'true'
     BeforeLambdaBody: 'false'
     BeforeWhile: 'false'
     IndentBraces: 'false'

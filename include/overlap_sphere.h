@@ -3,13 +3,14 @@
 #include "art_addon.h"
 #include "helper_game.h"
 #include "helper_math.h"
+#include "mod_input.h"
 
 namespace vrinput
 {
 	struct OverlapEvent
 	{
 		bool entered;
-		bool isLeft;
+		Hand triggered_by;
 		int  id;
 	};
 
@@ -25,8 +26,9 @@ namespace vrinput
 	public:
 		static std::shared_ptr<OverlapSphere> Make(RE::NiAVObject* a_attach_to,
 			OverlapCallback a_callback, float a_radius, float a_max_angle_deg = 0.0f,
+			Hand                a_active_hand = Hand::kBoth,
 			const RE::NiPoint3& a_offset = RE::NiPoint3(0.0, 0.0, 0.0),
-			const RE::NiPoint3& a_normal = RE::NiPoint3(0.0, 0.0, 0.0));
+			const RE::NiPoint3& a_normal = RE::NiPoint3(1.0, 0.0, 0.0));
 
 		~OverlapSphere() = default;
 
@@ -49,6 +51,7 @@ namespace vrinput
 		float                                squared_radius;
 		std::shared_ptr<art_addon::ArtAddon> visible_debug_sphere;
 		int                                  id;
+		Hand                                 which_hand_activates;
 	};
 
 	class OverlapSphereManager
@@ -62,10 +65,13 @@ namespace vrinput
 			return &singleton;
 		}
 
-		void Update();
+		/** temporary workaround - returns true if hand position is ok */
+		bool Update();
 		void ShowDebugSpheres();
 		void HideDebugSpheres();
 		void SetPalmOffset(const RE::NiPoint3& a_offset);
+
+		RE::NiTransform* GetCachedHand(bool isLeft) { return &(hand_transform_cache[isLeft]); }
 
 	private:
 		static constexpr float        kHysteresis = 20.f;
@@ -79,6 +85,7 @@ namespace vrinput
 		const int                     kOffHexColor = 0xff00ff;
 
 		OverlapSphereManager();
+		~OverlapSphereManager() = default;
 		OverlapSphereManager(const OverlapSphereManager&) = delete;
 		OverlapSphereManager(OverlapSphereManager&&) = delete;
 		OverlapSphereManager& operator=(const OverlapSphereManager&) = delete;
@@ -86,11 +93,12 @@ namespace vrinput
 
 		art_addon::ArtAddonPtr CreateVisibleSphere(const OverlapSphere& a_s);
 		int                    GetNextId();
-		bool                   SendEvent(const OverlapSphere& a_s, bool a_entered, bool isLeft);
+		bool SendEvent(const OverlapSphere& a_s, bool a_entered, Hand triggered_by);
 
 		std::vector<std::weak_ptr<OverlapSphere>> process_list;
 		std::mutex                                process_lock;
 		art_addon::ArtAddonPtr                    controller_models[2];
+		RE::NiTransform                           hand_transform_cache[2];
 		RE::NiPoint3                              palm_offset = RE::NiPoint3::Zero();
 		bool                                      draw_spheres = false;
 		RE::NiColor*                              on;
