@@ -17,6 +17,11 @@ namespace helper
 		return nullptr;
 	}
 
+	RE::FormID GetFullFormID(uint8_t a_modindex, RE::FormID a_localID)
+	{
+		return (a_modindex << 24) | a_localID;
+	}
+
 	float GetAVPercent(Actor* a_a, ActorValue a_v)
 	{
 		float current = a_a->AsActorValueOwner()->GetActorValue(a_v);
@@ -32,7 +37,8 @@ namespace helper
 		{
 			if (equipped->IsWeapon())
 			{
-				float current = a_a->AsActorValueOwner()->GetActorValue(ActorValue::kRightItemCharge);
+				float current =
+					a_a->AsActorValueOwner()->GetActorValue(ActorValue::kRightItemCharge);
 
 				// player made items
 				if (auto entryData = a_a->GetEquippedEntryData(isLeft))
@@ -105,7 +111,10 @@ namespace helper
 		if (src && a_target && a_spell)
 		{
 			auto caster = src->GetMagicCaster(MagicSystem::CastingSource::kInstant);
-			if (caster) { caster->CastSpellImmediate(a_spell, false, a_target, 1.0, false, 1.0, src); }
+			if (caster)
+			{
+				caster->CastSpellImmediate(a_spell, false, a_target, 1.0, false, 1.0, src);
+			}
 		}
 	}
 
@@ -141,6 +150,32 @@ namespace helper
 				return RE::BSContainer::ForEachResult::kContinue;
 			});
 			SKSE::log::debug("{} player effects and {} dangling MRE", player, dangling);
+		}
+	}
+
+	void PrintPlayerShaderEffects()
+	{
+		if (const auto processLists = RE::ProcessLists::GetSingleton())
+		{
+			int player = 0;
+			int dangling = 0;
+			processLists->ForEachShaderEffect([&](RE::ShaderReferenceEffect& a_shaderEffect) {
+				if (a_shaderEffect.target.get()->AsReference() ==
+					RE::PlayerCharacter::GetSingleton()->AsReference())
+				{
+					if (a_shaderEffect.effectData)
+					{
+						SKSE::log::debug(
+							"SRE:{}  AO:{}", (void*)&a_shaderEffect, (void*)a_shaderEffect.effectData);
+						player++;
+					} else
+					{
+						dangling++;
+					}
+				}
+				return RE::BSContainer::ForEachResult::kContinue;
+			});
+			SKSE::log::debug("{} player effects and {} dangling SRE", player, dangling);
 		}
 	}
 }

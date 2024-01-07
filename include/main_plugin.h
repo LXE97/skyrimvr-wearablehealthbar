@@ -20,14 +20,12 @@ namespace wearable_plugin
 	extern PapyrusVR::VRManagerAPI*         g_VRManager;
 
 	void StartMod();
+	void DataLoaded();
 	void GameLoad();
-	void GameSave();
 	void PreGameLoad();
 
 	bool OnDEBUGBtnPressA();
-	bool OnDEBUGBtnReleaseA();
 	bool OnDEBUGBtnPressB();
-	void OnEquipEvent(const RE::TESEquipEvent* event);
 
 	void RegisterVRInputCallback();
 }

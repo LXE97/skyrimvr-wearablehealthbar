@@ -3,24 +3,48 @@
 
 namespace vrinput
 {
+	constexpr const char* kLeftHandNodeName = "NPC L Hand [LHnd]";
+	constexpr const char* kRightHandNodeName = "NPC R Hand [RHnd]";
+
 	extern vr::TrackedDeviceIndex_t g_leftcontroller;
 	extern vr::TrackedDeviceIndex_t g_rightcontroller;
 
-	enum whichController
+	enum class Hand
 	{
-		Left = true,
-		Right = false
+		kRight = 0,
+		kLeft,
+		kBoth
 	};
-	enum touchOrPress
+	enum class ActionType
 	{
-		Touch = true,
-		Press = false
+		kPress = 0,
+		kTouch
 	};
-	enum buttonupOrButtondown
+	enum class ButtonState
 	{
-		ButtonDown = true,
-		ButtonUp = false
+		kButtonUp = 0,
+		kButtonDown
 	};
+
+	inline Hand GetOtherHand(Hand a)
+	{
+		switch (a)
+		{
+		case Hand::kRight:
+			return Hand::kLeft;
+		case Hand::kLeft:
+			return Hand::kRight;
+		default:
+			return Hand::kBoth;
+		}
+	}
+
+	inline RE::NiAVObject* GetHandNode(Hand a_hand, bool a_first_person)
+	{
+		return RE::PlayerCharacter::GetSingleton()
+		    ->Get3D(a_first_person)
+		    ->GetObjectByName(a_hand == Hand::kRight ? kRightHandNodeName : kLeftHandNodeName);
+	}
 
 	constexpr std::array all_buttons{ vr::k_EButton_System,
 		vr::k_EButton_ApplicationMenu,  // aka B button
@@ -29,16 +53,29 @@ namespace vrinput
 		vr::k_EButton_ProximitySensor, vr::k_EButton_SteamVR_Touchpad,
 		vr::k_EButton_SteamVR_Trigger };
 
+	struct ModInputEvent
+	{
+		Hand        device;
+		ActionType  touch_or_press;
+		ButtonState button_state;
+
+		bool operator==(const ModInputEvent& a_rhs)
+		{
+			return (device == a_rhs.device) && (touch_or_press == a_rhs.touch_or_press) &&
+			       (button_state == a_rhs.button_state);
+		}
+	};
+
 	// returns: true if input that triggered the event should be blocked
 	// Decision to block controller input to the game is made inside the callback, because we don't want to block it
 	// if e.g. a menu is open or the action bound to this input is not applicable.
 	// If the press is blocked, then we don't need to block the release
-	typedef bool (*InputCallbackFunc)();
+	typedef bool (*InputCallbackFunc)(const ModInputEvent& e);
 
-	void AddCallback(const vr::EVRButtonId a_button, InputCallbackFunc a_callback, bool isLeft,
-		bool onTouch, bool onButtonDown);
-	void RemoveCallback(const vr::EVRButtonId a_button, InputCallbackFunc a_callback, bool isLeft,
-		bool onTouch, bool onButtonDown);
+	void AddCallback(const vr::EVRButtonId a_button, const InputCallbackFunc a_callback,
+		const Hand hand, const ActionType touch_or_press);
+	void RemoveCallback(const vr::EVRButtonId a_button, const InputCallbackFunc a_callback,
+		const Hand hand, const ActionType touch_or_press);
 
 	void StartBlockingAll();
 	void StopBlockingAll();

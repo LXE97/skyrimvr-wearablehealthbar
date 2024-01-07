@@ -59,6 +59,7 @@ void MessageListener(SKSE::MessagingInterface::Message* message)
 		if (g_higgsInterface)
 		{
 			info("Got higgs interface");
+
 		} else
 		{
 			critical("Plugin disabled: HIGGS interface not found");
@@ -101,7 +102,6 @@ void MessageListener(SKSE::MessagingInterface::Message* message)
 
 	case SKSE::MessagingInterface::kSaveGame:
 		// trace("kSaveGame");
-		if (!g_pluginError) wearable_plugin::GameSave();
 		break;
 
 	case SKSE::MessagingInterface::kDeleteGame:
@@ -126,7 +126,8 @@ void OnPapyrusVRMessage(SKSE::MessagingInterface::Message* message)
 		if (message->type == kPapyrusVR_Message_Init && message->data)
 		{
 			SKSE::log::info(
-				"SkyrimVRTools Init Message recived with valid data, registering for callback");
+				"SkyrimVRTools Init Message recived with valid data, registering for "
+				"callback");
 			g_papyrusvr = (PapyrusVRAPI*)message->data;
 
 			wearable_plugin::g_VRManager = g_papyrusvr->GetVRManager();

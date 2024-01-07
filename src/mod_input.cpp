@@ -6,12 +6,13 @@ namespace vrinput
 {
 	struct InputCallback
 	{
-		uint8_t           flags;
+		Hand              device;
+		ActionType        type;
 		InputCallbackFunc func;
 
 		bool operator==(const InputCallback& a_rhs)
 		{
-			return (flags == a_rhs.flags) && (func == a_rhs.func);
+			return (device == a_rhs.device) && (type == a_rhs.type) && (func == a_rhs.func);
 		}
 	};
 
@@ -24,33 +25,27 @@ namespace vrinput
 	std::unordered_map<vr::EVRButtonId, std::vector<InputCallback>> callbacks;
 	std::unordered_map<vr::EVRButtonId, bool>                       buttonStates;
 
-	inline uint8_t packEventFlags(bool touch, bool buttonPress, bool isLeft)
-	{
-		return (0u | touch << 2 | buttonPress << 1 | (uint8_t)isLeft);
-	}
-
 	void StartBlockingAll() { block_all_inputs = true; }
 	void StopBlockingAll() { block_all_inputs = false; }
 	bool isBlockingAll() { return block_all_inputs; }
 
-	void AddCallback(const vr::EVRButtonId a_button, InputCallbackFunc a_callback, bool isLeft,
-		bool onTouch, bool onButtonDown)
+	void AddCallback(const vr::EVRButtonId a_button, const InputCallbackFunc a_callback,
+		const Hand hand, const ActionType touch_or_press)
 	{
 		std::scoped_lock lock(callback_lock);
 		if (!a_callback) return;
 
-		callbacks[a_button].push_back(
-			InputCallback(packEventFlags(onTouch, onButtonDown, isLeft), a_callback));
+		callbacks[a_button].push_back(InputCallback(hand, touch_or_press, a_callback));
 	}
 
-	void RemoveCallback(const vr::EVRButtonId a_button, InputCallbackFunc a_callback, bool isLeft,
-		bool onTouch, bool onButtonDown)
+	void RemoveCallback(const vr::EVRButtonId a_button, const InputCallbackFunc a_callback,
+		const Hand hand, const ActionType touch_or_press)
 	{
 		std::scoped_lock lock(callback_lock);
 		if (!a_callback) return;
 
 		auto it = std::find(callbacks[a_button].begin(), callbacks[a_button].end(),
-			InputCallback(packEventFlags(onTouch, onButtonDown, isLeft), a_callback));
+			InputCallback(hand, touch_or_press, a_callback));
 		if (it != callbacks[a_button].end()) { callbacks[a_button].erase(it); }
 	}
 
@@ -66,17 +61,18 @@ namespace vrinput
 			if (bitmask & changedMask && callbacks.contains(buttonID))
 			{
 				// check whether it was a press or release event
-				uint64_t buttonPress = bitmask & currentState;
+				bool buttonPress = bitmask & currentState;
 
-				uint8_t eventFlags = packEventFlags(touch, (bool)buttonPress, isLeft);
+				const ModInputEvent event_flags = ModInputEvent(static_cast<Hand>(isLeft),
+					static_cast<ActionType>(touch), static_cast<ButtonState>(buttonPress));
 
 				// iterate through callbacks for this button and call if flags match
-				for (auto cb : callbacks[buttonID])
+				for (auto& cb : callbacks[buttonID])
 				{
-					if (cb.flags == eventFlags)
+					if (cb.device == event_flags.device && cb.type == event_flags.touch_or_press)
 					{
 						// the callback tells us if we should block the input
-						if (cb.func())
+						if (cb.func(event_flags))
 						{
 							if (buttonPress)  // clear the current state of the button
 							{
@@ -110,40 +106,43 @@ namespace vrinput
 		vr::VRControllerState_t* pOutputControllerState)
 	{
 		// save last controller input to only do processing on button changes
-		static uint64_t prev_Pressed[2] = {};
-		static uint64_t prev_Touched[2] = {};
+		static uint64_t prev_pressed[2] = {};
+		static uint64_t prev_touched[2] = {};
 
 		// need to remember the last output sent to the game in order to maintain input blocking
 		static uint64_t prev_Pressed_out[2] = {};
-		static uint64_t prev_Touched_out[2] = {};
+		static uint64_t prev_touched_out[2] = {};
 
 		if (pControllerState && !menuchecker::isGameStopped())
 		{
 			bool isLeft = unControllerDeviceIndex == g_leftcontroller;
 			if (isLeft || unControllerDeviceIndex == g_rightcontroller)
 			{
-				uint64_t pressedChange = prev_Pressed[isLeft] ^ pControllerState->ulButtonPressed;
-				uint64_t touchedChange = prev_Touched[isLeft] ^ pControllerState->ulButtonTouched;
-				if (pressedChange)
+				uint64_t pressed_change = prev_pressed[isLeft] ^ pControllerState->ulButtonPressed;
+				uint64_t touched_change = prev_touched[isLeft] ^ pControllerState->ulButtonTouched;
+
+				if (pressed_change)
 				{
-					vrinput::processButtonChanges(pressedChange, pControllerState->ulButtonPressed,
+					vrinput::processButtonChanges(pressed_change, pControllerState->ulButtonPressed,
 						isLeft, false, pOutputControllerState);
-					prev_Pressed[isLeft] = pControllerState->ulButtonPressed;
+					prev_pressed[isLeft] = pControllerState->ulButtonPressed;
 					prev_Pressed_out[isLeft] = pOutputControllerState->ulButtonPressed;
 				} else
 				{
 					pOutputControllerState->ulButtonPressed = prev_Pressed_out[isLeft];
 				}
-				if (touchedChange)
+
+				if (touched_change)
 				{
-					vrinput::processButtonChanges(touchedChange, pControllerState->ulButtonTouched,
+					vrinput::processButtonChanges(touched_change, pControllerState->ulButtonTouched,
 						isLeft, true, pOutputControllerState);
-					prev_Touched[isLeft] = pControllerState->ulButtonTouched;
-					prev_Touched_out[isLeft] = pOutputControllerState->ulButtonTouched;
+					prev_touched[isLeft] = pControllerState->ulButtonTouched;
+					prev_touched_out[isLeft] = pOutputControllerState->ulButtonTouched;
 				} else
 				{
-					pOutputControllerState->ulButtonTouched = prev_Touched_out[isLeft];
+					pOutputControllerState->ulButtonTouched = prev_touched_out[isLeft];
 				}
+
 				if (vrinput::isBlockingAll())
 				{
 					pOutputControllerState->ulButtonPressed = 0;

@@ -1,7 +1,9 @@
 #pragma once
 #include "art_addon.h"
+#include "higgsinterface001.h"
 #include "mod_input.h"
 #include "overlap_sphere.h"
+#include "vrikinterface001.h"
 
 #include <memory>
 
@@ -21,19 +23,23 @@ namespace wearable
 	using WearablePtr = std::shared_ptr<Wearable>;
 	class WearableManager
 	{
+		// TODO: read from file
 		struct Config
 		{
-			float           overlap_angle = 0.f;
-			float           overlap_radius = 3.f;
+			float           overlap_angle = 45.f;
+			float           overlap_radius = 4.f;
 			float           movement_scale = 1.0f;
 			float           smoothing = 1.0f;
-			float           enter_dressing_tap_delay_min = 0.1f;
-			float           enter_dressing_tap_delay_max = 0.7f;
+			int             enter_dressing_tap_delay_min_ms = 100;
+			int             enter_dressing_tap_delay_max_ms = 900;
+			bool            block_mode_control_on_overlap = true;
 			vr::EVRButtonId enter_dressing_mode = vr::k_EButton_Grip;
 			vr::EVRButtonId translate = vr::k_EButton_Grip;
 			vr::EVRButtonId scale = vr::k_EButton_SteamVR_Trigger;
 			vr::EVRButtonId color = vr::k_EButton_A;
 			vr::EVRButtonId cycle_AV = vr::k_EButton_ApplicationMenu;
+			vr::EVRButtonId exit[4] = { vr::k_EButton_SteamVR_Trigger, vr::k_EButton_A,
+				vr::k_EButton_ApplicationMenu, vr::k_EButton_Grip };
 		};
 
 	public:
@@ -52,24 +58,45 @@ namespace wearable
 
 		Config&             GetConfig() { return config; }
 		DressingState const GetState() { return dressingmode_state; }
-		int                 FindWearableWithOverlapID(int a_id);
+		void const          SetState(DressingState a_next) { dressingmode_next_state = a_next; }
 
 	private:
-		static constexpr const RE::FormID shader_id = 0x6F00;
-		static constexpr const char*      higgs_esp = "higgs_vr.esp";
+		WearableManager();
+		~WearableManager() = default;
+		WearableManager(const WearableManager&) = delete;
+		WearableManager(WearableManager&&) = delete;
+		WearableManager& operator=(const WearableManager&) = delete;
+		WearableManager& operator=(WearableManager&&) = delete;
 
-		static bool WearableGrabHandler();
-		static void WearableOverlapHandler(const vrinput::OverlapEvent& e);
+		static bool EnterDressingModeControl(const vrinput::ModInputEvent& e);
+		static bool ExitDressingModeControl(const vrinput::ModInputEvent& e);
+		static bool TranslateControl(const vrinput::ModInputEvent& e);
+		static bool ScaleControl(const vrinput::ModInputEvent& e);
+		static bool ColorControl(const vrinput::ModInputEvent& e);
+		static bool CycleAVControl(const vrinput::ModInputEvent& e);
+
+		static void OverlapHandler(const vrinput::OverlapEvent& e);
+
+		std::weak_ptr<Wearable> FindWearableWithOverlapID(int a_id);
+
+		/* if arg is nullptr, removes the selection shader */
+		void ApplySelectionShader(RE::NiAVObject* a_target = nullptr);
+
+		void RegisterDressingModeButtons(bool a_unregister_register);
+
+		void CaptureInitialTransforms();
 
 		std::vector<std::weak_ptr<Wearable>> managed_objects;
 		std::mutex                           managed_objects_lock;
 		Config                               config;
-		RE::TESEffectShader*                 shader;
+		RE::TESEffectShader*                 shader = nullptr;
 		DressingState                        dressingmode_state = DressingState::kNone;
-		RE::NiTransform                      dressingmode_initial;
-		bool                                 dressingmode_active_isLeft = false;
-		int                                  dressingmode_selected_index = 0;
+		DressingState                        dressingmode_next_state = DressingState::kNone;
+		RE::NiTransform                      dressingmode_wearable_initial;
+		RE::NiTransform                      dressingmode_hand_initial;
+		std::weak_ptr<Wearable>              dressingmode_selected_item;
 		int                                  dressingmode_hovered_sphere_id = 0;
+		vrinput::Hand                        dressingmode_active_hand;
 	};
 
 	/** Represents a model attached to the player body with an accompanying interaction sphere
@@ -80,14 +107,15 @@ namespace wearable
 
 	public:
 		virtual ~Wearable() = default;
-		Wearable(
-			const char* a_model_path, RE::NiAVObject* a_attach_node, RE::NiTransform& a_local) :
+		Wearable(const char* a_model_path, RE::NiAVObject* a_attach_node, RE::NiTransform& a_local,
+			vrinput::Hand a_active_hand = vrinput::Hand::kBoth) :
 			model_path(a_model_path),
 			attach_node(a_attach_node),
-			local(a_local)
+			local(a_local),
+			active_hand(a_active_hand)
 		{}
 
-	protected:
+	public:
 		virtual void Update() = 0;
 
 		art_addon::ArtAddonPtr    model = nullptr;
@@ -96,6 +124,7 @@ namespace wearable
 		RE::NiAVObject* attach_node;
 		RE::NiTransform local;
 		const char*     model_path;
+		vrinput::Hand   active_hand;
 	};
 
 	/** One or more meters in a single model */

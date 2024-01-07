@@ -1,4 +1,5 @@
-#define PROFILE 1
+#undef PROFILE
+
 #include "main_plugin.h"
 
 #include "helper_game.h"
@@ -25,56 +26,46 @@ namespace wearable_plugin
 	OpenVRHookManagerAPI*            g_OVRHookManager;
 	PapyrusVR::VRManagerAPI*         g_VRManager;
 
+	TESEffectShader* g_selection_effect;
+
 	// DEBUG
-	int32_t  g_debugLHandDrawSphere;
-	int32_t  g_debugRHandDrawSphere;
 	NiPoint3 g_higgs_palmPosHandspace;
-	NiPoint3 g_NPCHandPalmNormal = { 0, -1, 0 };
 
 	// TODO config file
 	vr::EVRButtonId    g_config_SecondaryBtn = vr::k_EButton_SteamVR_Trigger;
 	vr::EVRButtonId    g_config_PrimaryBtn = vr::k_EButton_Grip;
 	std::vector<float> times;
 
-	void OnOverlap(const vrinput::OverlapEvent& e) {}
+	void OnOverlap(const OverlapEvent& e) {}
 
 	std::shared_ptr<Wearable> w;
-	OverlapSpherePtr          huh;
 
-	bool OnDEBUGBtnReleaseA()
+	bool OnDEBUGBtnPressA(const ModInputEvent& e)
 	{
-		SKSE::log::trace("A left ");
-		if (!menuchecker::isGameStopped()) { auto player = RE::PlayerCharacter::GetSingleton(); }
-		return false;
-	}
-
-	bool OnDEBUGBtnPressA()
-	{
-		auto player = PlayerCharacter::GetSingleton();
-		SKSE::log::trace("A right");
-		if (!menuchecker::isGameStopped())
+		if (e.button_state == ButtonState::kButtonDown)
 		{
-			bool once = true;
-			{
-				NiTransform                   t;
-				std::vector<std::string>      names = { "meter1" };
-				std::vector<Meter::MeterType> av = { Meter::MeterType::kHealth };
+			auto player = PlayerCharacter::GetSingleton();
+			SKSE::log::trace("A right");
 
-				w = std::make_shared<Meter>("armor/SoulGauge/Mara-attach.nif",
-					player->Get3D(false)->GetObjectByName("NPC L Hand [LHnd]"), t, av, names);
-				WearableManager::GetSingleton()->Register(w);
-			}
+			if (!menuchecker::isGameStopped()) {}
 		}
 		return false;
 	}
 
-	bool OnDEBUGBtnPressB()
+	bool OnDEBUGBtnPressB(const ModInputEvent& e)
 	{
-		auto player = PlayerCharacter::GetSingleton();
-		SKSE::log::trace("B press");
-		if (!menuchecker::isGameStopped())
+		if (e.button_state == ButtonState::kButtonDown)
 		{
-			OverlapSphereManager::GetSingleton()->ShowDebugSpheres();
+			auto player = PlayerCharacter::GetSingleton();
+			SKSE::log::trace("B press");
+			if (!menuchecker::isGameStopped())
+			{
+				static bool toggle = false;
+				if (toggle ^= 1)
+					vrinput::OverlapSphereManager::GetSingleton()->ShowDebugSpheres();
+				else
+					vrinput::OverlapSphereManager::GetSingleton()->HideDebugSpheres();
+			}
 		}
 		return false;
 	}
@@ -86,10 +77,8 @@ namespace wearable_plugin
 
 		auto start = std::chrono::steady_clock::now();
 #endif
-		ArtAddonManager::GetSingleton()->Update();
 
-		static int c = 0;
-		if (c++ % 1 == 0) { WearableManager::GetSingleton()->Update(); }
+		ArtAddonManager::GetSingleton()->Update();
 
 #ifdef PROFILE
 		auto end = std::chrono::steady_clock::now();
@@ -107,11 +96,22 @@ namespace wearable_plugin
 #endif
 	}
 
-	void GameLoad() {}
+	void GameLoad()
+	{
+		auto player = RE::PlayerCharacter::GetSingleton();
 
-	void PreGameLoad() {}
+		//OverlapSphereManager::GetSingleton()->ShowDebugSpheres();
+		w.reset();
+		NiTransform                   t;
+		std::vector<std::string>      names = { "meter1" };
+		std::vector<Meter::MeterType> av = { Meter::MeterType::kHealth };
 
-	void GameSave() { SKSE::log::trace("game save event"); }
+		w = std::make_shared<Meter>("armor/SoulGauge/Mara-attach.nif",
+			player->Get3D(false)->GetObjectByName("NPC L Hand [LHnd]"), t, av, names);
+		WearableManager::GetSingleton()->Register(w);
+	}
+
+	void PreGameLoad() { WearableManager::GetSingleton()->TransitionState(DressingState::kNone); }
 
 	void StartMod()
 	{
@@ -125,28 +125,32 @@ namespace wearable_plugin
 		{
 			// TODO: read this from config
 			g_higgs_palmPosHandspace = { 0, -2.4, 6 };
+
 			g_higgsInterface->AddPostVrikPostHiggsCallback(&Update);
+
+			vrinput::OverlapSphereManager::GetSingleton()->SetPalmOffset(g_higgs_palmPosHandspace);
 		}
 
 		// Other Manager setup
-		vrinput::OverlapSphereManager::GetSingleton()->SetPalmOffset(g_higgs_palmPosHandspace);
 
-		// TODO: workaround for problem with accessing post-VRIK update third person skeleton
+		// TODO: workaround for problem with accessing post-VRIK-update third person skeleton
 		std::thread p1([]() {
-			auto man = vrinput::OverlapSphereManager::GetSingleton();
 			while (1)
 			{
-				man->Update();
-				std::this_thread::sleep_for(std::chrono::milliseconds(20));
+				if (vrinput::OverlapSphereManager::GetSingleton()->Update())
+				{
+					WearableManager::GetSingleton()->Update();
+				}
+
+				std::this_thread::sleep_for(std::chrono::milliseconds(30));
 			}
 		});
 		p1.detach();
 
 		// register event sinks and handlers
-		vrinput::AddCallback(vr::k_EButton_A, OnDEBUGBtnPressA, Right, Press, ButtonDown);
-		vrinput::AddCallback(vr::k_EButton_A, OnDEBUGBtnReleaseA, Left, Press, ButtonUp);
+		vrinput::AddCallback(vr::k_EButton_A, OnDEBUGBtnPressA, Hand::kRight, ActionType::kPress);
 		vrinput::AddCallback(
-			vr::k_EButton_ApplicationMenu, OnDEBUGBtnPressB, Right, Press, ButtonDown);
+			vr::k_EButton_ApplicationMenu, OnDEBUGBtnPressB, Hand::kRight, ActionType::kPress);
 	}
 
 	// Register SkyrimVRTools callback
