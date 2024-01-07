@@ -42,8 +42,8 @@ namespace vrinput
 	inline RE::NiAVObject* GetHandNode(Hand a_hand, bool a_first_person)
 	{
 		return RE::PlayerCharacter::GetSingleton()
-		    ->Get3D(a_first_person)
-		    ->GetObjectByName(a_hand == Hand::kRight ? kRightHandNodeName : kLeftHandNodeName);
+			->Get3D(a_first_person)
+			->GetObjectByName(a_hand == Hand::kRight ? kRightHandNodeName : kLeftHandNodeName);
 	}
 
 	constexpr std::array all_buttons{ vr::k_EButton_System,
@@ -62,7 +62,7 @@ namespace vrinput
 		bool operator==(const ModInputEvent& a_rhs)
 		{
 			return (device == a_rhs.device) && (touch_or_press == a_rhs.touch_or_press) &&
-			       (button_state == a_rhs.button_state);
+				(button_state == a_rhs.button_state);
 		}
 	};
 
@@ -81,10 +81,16 @@ namespace vrinput
 	void StopBlockingAll();
 	bool isBlockingAll();
 
-	void StartSmoothing(float a_damping_factor);
+	void StartSmoothing(int a_damping_factor);
 	void StopSmoothing();
 
 	bool ControllerInput_CB(vr::TrackedDeviceIndex_t unControllerDeviceIndex,
 		const vr::VRControllerState_t* pControllerState, uint32_t unControllerStateSize,
 		vr::VRControllerState_t* pOutputControllerState);
+
+	vr::EVRCompositorError cbFuncGetPoses(VR_ARRAY_COUNT(unRenderPoseArrayCount)
+											  vr::TrackedDevicePose_t* pRenderPoseArray,
+		uint32_t                                                       unRenderPoseArrayCount,
+		VR_ARRAY_COUNT(unGamePoseArrayCount) vr::TrackedDevicePose_t*  pGamePoseArray,
+		uint32_t                                                       unGamePoseArrayCount);
 }

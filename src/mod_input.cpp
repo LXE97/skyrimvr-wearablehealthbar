@@ -4,6 +4,17 @@
 
 namespace vrinput
 {
+	using namespace vr;
+
+	bool block_all_inputs = false;
+	int  smoothing_window = 30;
+
+	std::mutex               callback_lock;
+	vr::TrackedDeviceIndex_t g_leftcontroller;
+	vr::TrackedDeviceIndex_t g_rightcontroller;
+
+	std::deque<vr::TrackedDevicePose_t> pose_buffer[2];
+
 	struct InputCallback
 	{
 		Hand              device;
@@ -16,10 +27,33 @@ namespace vrinput
 		}
 	};
 
-	std::mutex               callback_lock;
-	bool                     block_all_inputs;
-	vr::TrackedDeviceIndex_t g_leftcontroller;
-	vr::TrackedDeviceIndex_t g_rightcontroller;
+	TrackedDevicePose_t operator+(const TrackedDevicePose_t& lhs, const TrackedDevicePose_t& rhs)
+	{
+		TrackedDevicePose_t result;
+		for (int i = 0; i < 3; ++i)
+		{
+			for (int j = 0; j < 4; ++j)
+			{
+				result.mDeviceToAbsoluteTracking.m[i][j] =
+					lhs.mDeviceToAbsoluteTracking.m[i][j] + rhs.mDeviceToAbsoluteTracking.m[i][j];
+			}
+			result.vAngularVelocity.v[i] = lhs.vVelocity.v[i] + rhs.vVelocity.v[i];
+			result.vAngularVelocity.v[i] = lhs.vAngularVelocity.v[i] + rhs.vAngularVelocity.v[i];
+		}
+
+		return result;
+	}
+
+	vr::TrackedDevicePose_t& operator/=(vr::TrackedDevicePose_t& lhs, float divisor)
+	{
+		for (int i = 0; i < 3; ++i)
+		{
+			for (int j = 0; j < 4; ++j) { lhs.mDeviceToAbsoluteTracking.m[i][j] /= divisor; }
+			lhs.vVelocity.v[i] /= divisor;
+			lhs.vAngularVelocity.v[i] /= divisor;
+		}
+		return lhs;
+	}
 
 	// each button id is mapped to a list of callback funcs
 	std::unordered_map<vr::EVRButtonId, std::vector<InputCallback>> callbacks;
@@ -28,6 +62,9 @@ namespace vrinput
 	void StartBlockingAll() { block_all_inputs = true; }
 	void StopBlockingAll() { block_all_inputs = false; }
 	bool isBlockingAll() { return block_all_inputs; }
+
+	void StartSmoothing(int a_damping_factor) { smoothing_window = a_damping_factor; }
+	void StopSmoothing() { smoothing_window = 0; }
 
 	void AddCallback(const vr::EVRButtonId a_button, const InputCallbackFunc a_callback,
 		const Hand hand, const ActionType touch_or_press)
@@ -76,22 +113,13 @@ namespace vrinput
 						{
 							if (buttonPress)  // clear the current state of the button
 							{
-								if (touch)
-								{
-									out->ulButtonTouched &= ~bitmask;
-								} else
-								{
-									out->ulButtonPressed &= ~bitmask;
-								}
-							} else  // set the current state of the button
+								if (touch) { out->ulButtonTouched &= ~bitmask; }
+								else { out->ulButtonPressed &= ~bitmask; }
+							}
+							else  // set the current state of the button
 							{
-								if (touch)
-								{
-									out->ulButtonTouched |= bitmask;
-								} else
-								{
-									out->ulButtonPressed |= bitmask;
-								}
+								if (touch) { out->ulButtonTouched |= bitmask; }
+								else { out->ulButtonPressed |= bitmask; }
 							}
 						}
 					}
@@ -127,10 +155,8 @@ namespace vrinput
 						isLeft, false, pOutputControllerState);
 					prev_pressed[isLeft] = pControllerState->ulButtonPressed;
 					prev_Pressed_out[isLeft] = pOutputControllerState->ulButtonPressed;
-				} else
-				{
-					pOutputControllerState->ulButtonPressed = prev_Pressed_out[isLeft];
 				}
+				else { pOutputControllerState->ulButtonPressed = prev_Pressed_out[isLeft]; }
 
 				if (touched_change)
 				{
@@ -138,10 +164,8 @@ namespace vrinput
 						isLeft, true, pOutputControllerState);
 					prev_touched[isLeft] = pControllerState->ulButtonTouched;
 					prev_touched_out[isLeft] = pOutputControllerState->ulButtonTouched;
-				} else
-				{
-					pOutputControllerState->ulButtonTouched = prev_touched_out[isLeft];
 				}
+				else { pOutputControllerState->ulButtonTouched = prev_touched_out[isLeft]; }
 
 				if (vrinput::isBlockingAll())
 				{
@@ -153,5 +177,41 @@ namespace vrinput
 			}
 		}
 		return true;
+	}
+
+	// handles device poses
+	vr::EVRCompositorError cbFuncGetPoses(VR_ARRAY_COUNT(unRenderPoseArrayCount)
+											  vr::TrackedDevicePose_t* pRenderPoseArray,
+		uint32_t                                                       unRenderPoseArrayCount,
+		VR_ARRAY_COUNT(unGamePoseArrayCount) vr::TrackedDevicePose_t*  pGamePoseArray,
+		uint32_t                                                       unGamePoseArrayCount)
+	{
+		if (smoothing_window > 0)
+		{
+			for (auto isLeft : { true, false })
+			{
+				auto dev = isLeft ? g_leftcontroller : g_rightcontroller;
+				if (pGamePoseArray[dev].bPoseIsValid)
+				{
+					pose_buffer[isLeft].push_front(pGamePoseArray[dev]);
+				}
+
+				while (pose_buffer[isLeft].size() > smoothing_window)
+				{
+					pose_buffer[isLeft].pop_back();
+				}
+
+				pGamePoseArray[dev] = std::accumulate(pose_buffer[isLeft].begin(),
+					pose_buffer[isLeft].end(), TrackedDevicePose_t{},
+					[](const TrackedDevicePose_t& acc, const TrackedDevicePose_t& element) {
+						return acc + element;
+					});
+
+				pGamePoseArray[dev] /= pose_buffer[isLeft].size();
+				SKSE::log::trace(
+					"{} {}", pGamePoseArray[dev].bPoseIsValid, pGamePoseArray[dev].bPoseIsValid);
+			}
+		}
+		return vr::EVRCompositorError::VRCompositorError_None;
 	}
 }
