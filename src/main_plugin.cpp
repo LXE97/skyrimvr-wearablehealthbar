@@ -40,14 +40,19 @@ namespace wearable_plugin
 
 	std::shared_ptr<Wearable> w;
 
+	int c = 0;
+
 	bool OnDEBUGBtnPressA(const ModInputEvent& e)
 	{
 		if (e.button_state == ButtonState::kButtonDown)
 		{
 			auto player = PlayerCharacter::GetSingleton();
-			SKSE::log::trace("A right");
 
-			if (!menuchecker::isGameStopped()) {}
+			if (!menuchecker::isGameStopped())
+			{
+				vrinput::StartSmoothing(c++);
+				SKSE::log::trace("{}", c);
+			}
 		}
 		return false;
 	}
@@ -60,6 +65,8 @@ namespace wearable_plugin
 			SKSE::log::trace("B press");
 			if (!menuchecker::isGameStopped())
 			{
+				vrinput::StartSmoothing(--c);
+				SKSE::log::trace("{}", c);
 				static bool toggle = false;
 				if (toggle ^= 1)
 					vrinput::OverlapSphereManager::GetSingleton()->ShowDebugSpheres();
@@ -171,6 +178,7 @@ namespace wearable_plugin
 					g_OVRHookManager->GetVRSystem()->GetTrackedDeviceIndexForControllerRole(
 						vr::TrackedControllerRole_RightHand);
 				g_OVRHookManager->RegisterControllerStateCB(vrinput::ControllerInput_CB);
+				g_OVRHookManager->RegisterGetPosesCB(vrinput::cbFuncGetPoses);
 			}
 		}
 	}
