@@ -15,10 +15,8 @@ namespace helper
 		if (std::abs(rot.entry[2][1]) < 0.9995f)
 		{
 			return std::atan2(rot.entry[0][1], rot.entry[1][1]);
-		} else
-		{
-			return -1.0f * std::atan2(rot.entry[1][0], rot.entry[0][0]);
 		}
+		else { return -1.0f * std::atan2(rot.entry[1][0], rot.entry[0][0]); }
 	}
 	// same but X axis
 	inline float GetElevation(NiMatrix3& rot)
@@ -43,6 +41,8 @@ namespace helper
 		float length = VectorLength(vec);
 		return length > 0.0f ? vec / length : NiPoint3();
 	}
+
+	RE::NiPoint3 LinearInterp(const RE::NiPoint3& v1, const RE::NiPoint3& v2, float interp);
 
 	NiPoint3 GetPalmVectorWS(NiMatrix3& handRotation, bool isLeft);
 	NiPoint3 GetThumbVector(NiMatrix3& handRotation);
@@ -75,17 +75,101 @@ namespace helper
 		return result;
 	}
 
+	inline void MirrorLeftHand(NiMatrix3& leftm)
+	{
+		leftm.entry[0][1] *= -1.0f;
+		leftm.entry[1][1] *= -1.0f;
+		leftm.entry[2][0] *= -1.0f;
+	}
+
 	inline NiMatrix3 RotateBetweenVectors(const NiPoint3& src, const NiPoint3& dest)
 	{
 		RE::NiPoint3 axis = src.UnitCross(dest);
-
-		if (axis.Length() < std::numeric_limits<float>::epsilon())
+		SKSE::log::trace("src {} {} {} dest {} {} {} axis {} {} {} length {}", src.x, src.y, src.z, dest.x,
+			dest.y, dest.z, axis.x, axis.y, axis.z, axis.Length());
+		auto angle = std::acos(helper::DotProductSafe(src, dest));
+		if (axis.Length() < 0.9995f)
 		{  // Handle the case where the vectors are collinear
 			axis = src.UnitCross(RE::NiPoint3(std::rand() / RAND_MAX, std::rand() / RAND_MAX, 0));
+			angle *= -1;
 		}
-		auto angle = std::acos(helper::DotProductSafe(src, dest));
-
 		return helper::getRotationAxisAngle(axis, angle);
+	}
+
+	// Interpolate between two rotation matrices using quaternion math (Prog's code)
+	static inline NiMatrix3 slerpMatrixAdaptive(NiMatrix3 mat1, NiMatrix3 mat2)
+	{
+		// Convert mat1 to a quaternion
+		float q1w =
+			sqrt(std::max(0.0f, 1 + mat1.entry[0][0] + mat1.entry[1][1] + mat1.entry[2][2])) / 2;
+		float q1x =
+			sqrt(std::max(0.0f, 1 + mat1.entry[0][0] - mat1.entry[1][1] - mat1.entry[2][2])) / 2;
+		float q1y =
+			sqrt(std::max(0.0f, 1 - mat1.entry[0][0] + mat1.entry[1][1] - mat1.entry[2][2])) / 2;
+		float q1z =
+			sqrt(std::max(0.0f, 1 - mat1.entry[0][0] - mat1.entry[1][1] + mat1.entry[2][2])) / 2;
+		q1x = _copysign(q1x, mat1.entry[2][1] - mat1.entry[1][2]);
+		q1y = _copysign(q1y, mat1.entry[0][2] - mat1.entry[2][0]);
+		q1z = _copysign(q1z, mat1.entry[1][0] - mat1.entry[0][1]);
+
+		// Convert mat2 to a quaternion
+		float q2w =
+			sqrt(std::max(0.0f, 1 + mat2.entry[0][0] + mat2.entry[1][1] + mat2.entry[2][2])) / 2;
+		float q2x =
+			sqrt(std::max(0.0f, 1 + mat2.entry[0][0] - mat2.entry[1][1] - mat2.entry[2][2])) / 2;
+		float q2y =
+			sqrt(std::max(0.0f, 1 - mat2.entry[0][0] + mat2.entry[1][1] - mat2.entry[2][2])) / 2;
+		float q2z =
+			sqrt(std::max(0.0f, 1 - mat2.entry[0][0] - mat2.entry[1][1] + mat2.entry[2][2])) / 2;
+		q2x = _copysign(q2x, mat2.entry[2][1] - mat2.entry[1][2]);
+		q2y = _copysign(q2y, mat2.entry[0][2] - mat2.entry[2][0]);
+		q2z = _copysign(q2z, mat2.entry[1][0] - mat2.entry[0][1]);
+
+		// Take the dot product, inverting q2 if it is negative
+		double dot = q1w * q2w + q1x * q2x + q1y * q2y + q1z * q2z;
+		if (dot < 0.0f)
+		{
+			q2w = -q2w;
+			q2x = -q2x;
+			q2y = -q2y;
+			q2z = -q2z;
+			dot = -dot;
+		}
+
+		float interp = 0.2f;
+
+		float q3w, q3x, q3y, q3z;
+		if (dot > 0.9996f) { return mat1; }
+		else if (dot > 0.999f) { interp = 0.02f; }
+		else if (dot > 0.99f) { interp = 0.05f; }
+
+		float interp_adjusted = 1 - dot * dot + interp;
+		interp_adjusted = std::clamp<float>(interp_adjusted, interp, 1.0f);
+
+		float theta_0 = acosf(dot);         // theta_0 = angle between input vectors
+		float theta = theta_0 * interp;     // theta = angle between q1 and result
+		float sin_theta = sinf(theta);      // compute this value only once
+		float sin_theta_0 = sinf(theta_0);  // compute this value only once
+		float s0 =
+			cosf(theta) - dot * sin_theta / sin_theta_0;  // == sin(theta_0 - theta) / sin(theta_0)
+		float s1 = sin_theta / sin_theta_0;
+		q3w = (s0 * q1w) + (s1 * q2w);
+		q3x = (s0 * q1x) + (s1 * q2x);
+		q3y = (s0 * q1y) + (s1 * q2y);
+		q3z = (s0 * q1z) + (s1 * q2z);
+
+		// Convert the new quaternion back to a matrix
+		NiMatrix3 result;
+		result.entry[0][0] = 1 - (2 * q3y * q3y) - (2 * q3z * q3z);
+		result.entry[0][1] = (2 * q3x * q3y) - (2 * q3z * q3w);
+		result.entry[0][2] = (2 * q3x * q3z) + (2 * q3y * q3w);
+		result.entry[1][0] = (2 * q3x * q3y) + (2 * q3z * q3w);
+		result.entry[1][1] = 1 - (2 * q3x * q3x) - (2 * q3z * q3z);
+		result.entry[1][2] = (2 * q3y * q3z) - (2 * q3x * q3w);
+		result.entry[2][0] = (2 * q3x * q3z) - (2 * q3y * q3w);
+		result.entry[2][1] = (2 * q3y * q3z) + (2 * q3x * q3w);
+		result.entry[2][2] = 1 - (2 * q3x * q3x) - (2 * q3y * q3y);
+		return result;
 	}
 
 	inline void Quat2Mat(NiMatrix3& matrix, NiQuaternion& quaternion)
@@ -117,13 +201,11 @@ namespace helper
 
 	inline void slerpQuat(float interp, NiQuaternion& q1, NiQuaternion& q2, NiMatrix3& out)
 	{
-		// Convert mat1 to a quaternion
 		float q1w = q1.w;
 		float q1x = q1.x;
 		float q1y = q1.y;
 		float q1z = q1.z;
 
-		// Convert mat2 to a quaternion
 		float q2w = q2.w;
 		float q2x = q2.x;
 		float q2y = q2.y;
@@ -155,14 +237,15 @@ namespace helper
 			q3z /= length;
 
 			// Otherwise do a spherical linear interpolation normally
-		} else
+		}
+		else
 		{
 			float theta_0 = acosf(dot);         // theta_0 = angle between input vectors
 			float theta = theta_0 * interp;     // theta = angle between q1 and result
 			float sin_theta = sinf(theta);      // compute this value only once
 			float sin_theta_0 = sinf(theta_0);  // compute this value only once
 			float s0 = cosf(theta) -
-			           dot * sin_theta / sin_theta_0;  // == sin(theta_0 - theta) / sin(theta_0)
+				dot * sin_theta / sin_theta_0;  // == sin(theta_0 - theta) / sin(theta_0)
 			float s1 = sin_theta / sin_theta_0;
 			q3w = (s0 * q1w) + (s1 * q2w);
 			q3x = (s0 * q1x) + (s1 * q2x);

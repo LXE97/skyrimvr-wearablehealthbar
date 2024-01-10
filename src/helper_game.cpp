@@ -27,7 +27,7 @@ namespace helper
 		float current = a_a->AsActorValueOwner()->GetActorValue(a_v);
 		float base = a_a->AsActorValueOwner()->GetBaseActorValue(a_v);
 		float mod = a_a->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kPermanent, a_v) +
-		            a_a->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kTemporary, a_v);
+			a_a->GetActorValueModifier(ACTOR_VALUE_MODIFIER::kTemporary, a_v);
 		return current / (base + mod);
 	}
 
@@ -87,17 +87,20 @@ namespace helper
 
 	void SetGlowColor(NiAVObject* a_target, NiColor* c)
 	{
-		auto geometry =
-			a_target->GetFirstGeometryOfShaderType(RE::BSShaderMaterial::Feature::kGlowMap);
-		if (geometry)
+		if (a_target)
 		{
-			auto shaderProp = geometry->GetGeometryRuntimeData()
-			                      .properties[RE::BSGeometry::States::kEffect]
-			                      .get();
-			if (shaderProp)
+			auto geometry =
+				a_target->GetFirstGeometryOfShaderType(RE::BSShaderMaterial::Feature::kGlowMap);
+			if (geometry)
 			{
-				auto shader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProp);
-				if (shader) { shader->emissiveColor = c; }
+				auto shaderProp = geometry->GetGeometryRuntimeData()
+									  .properties[RE::BSGeometry::States::kEffect]
+									  .get();
+				if (shaderProp)
+				{
+					auto shader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProp);
+					if (shader) { shader->emissiveColor = c; }
+				}
 			}
 		}
 	}
@@ -142,10 +145,8 @@ namespace helper
 						SKSE::log::debug(
 							"MRE:{}  AO:{}", (void*)&a_modelEffect, (void*)a_modelEffect.artObject);
 						player++;
-					} else
-					{
-						dangling++;
 					}
+					else { dangling++; }
 				}
 				return RE::BSContainer::ForEachResult::kContinue;
 			});
@@ -165,13 +166,11 @@ namespace helper
 				{
 					if (a_shaderEffect.effectData)
 					{
-						SKSE::log::debug(
-							"SRE:{}  AO:{}", (void*)&a_shaderEffect, (void*)a_shaderEffect.effectData);
+						SKSE::log::debug("SRE:{}  AO:{}", (void*)&a_shaderEffect,
+							(void*)a_shaderEffect.effectData);
 						player++;
-					} else
-					{
-						dangling++;
 					}
+					else { dangling++; }
 				}
 				return RE::BSContainer::ForEachResult::kContinue;
 			});

@@ -6,14 +6,16 @@ namespace vrinput
 {
 	using namespace vr;
 
-	bool block_all_inputs = false;
-	int  smoothing_window = 30;
+	bool  block_all_inputs = false;
+	int   smoothing_window = 0;
+	float adjustable = 0.02f;
 
 	std::mutex               callback_lock;
 	vr::TrackedDeviceIndex_t g_leftcontroller;
 	vr::TrackedDeviceIndex_t g_rightcontroller;
 
 	std::deque<vr::TrackedDevicePose_t> pose_buffer[2];
+	vr::TrackedDevicePose_t             simple_buffer[2] = {};
 
 	struct InputCallback
 	{
@@ -34,11 +36,10 @@ namespace vrinput
 		{
 			for (int j = 0; j < 4; ++j)
 			{
-				result.mDeviceToAbsoluteTracking.m[i][j] =
-					lhs.mDeviceToAbsoluteTracking.m[i][j] + rhs.mDeviceToAbsoluteTracking.m[i][j];
+				result.mDeviceToAbsoluteTracking.m[i][j] = lhs.mDeviceToAbsoluteTracking.m[i][j];
 			}
-			result.vAngularVelocity.v[i] = lhs.vVelocity.v[i] + rhs.vVelocity.v[i];
-			result.vAngularVelocity.v[i] = lhs.vAngularVelocity.v[i] + rhs.vAngularVelocity.v[i];
+			result.mDeviceToAbsoluteTracking.m[i][3] =
+				lhs.mDeviceToAbsoluteTracking.m[i][3] + rhs.mDeviceToAbsoluteTracking.m[i][3];
 		}
 
 		return result;
@@ -46,13 +47,44 @@ namespace vrinput
 
 	vr::TrackedDevicePose_t& operator/=(vr::TrackedDevicePose_t& lhs, float divisor)
 	{
+		for (int i = 0; i < 3; ++i) { lhs.mDeviceToAbsoluteTracking.m[i][3] /= divisor; }
+		return lhs;
+	}
+
+	RE::NiTransform HmdMatrixToNiTransform(const HmdMatrix34_t& hmdMatrix)
+	{
+		RE::NiTransform niTransform;
+
+		// Copy rotation matrix
 		for (int i = 0; i < 3; ++i)
 		{
-			for (int j = 0; j < 4; ++j) { lhs.mDeviceToAbsoluteTracking.m[i][j] /= divisor; }
-			lhs.vVelocity.v[i] /= divisor;
-			lhs.vAngularVelocity.v[i] /= divisor;
+			for (int j = 0; j < 3; ++j) { niTransform.rotate.entry[i][j] = hmdMatrix.m[i][j]; }
 		}
-		return lhs;
+
+		// Copy translation vector
+		niTransform.translate.x = hmdMatrix.m[0][3];
+		niTransform.translate.y = hmdMatrix.m[1][3];
+		niTransform.translate.z = hmdMatrix.m[2][3];
+
+		return niTransform;
+	}
+
+	HmdMatrix34_t NiTransformToHmdMatrix(const RE::NiTransform& niTransform)
+	{
+		HmdMatrix34_t hmdMatrix;
+
+		// Copy rotation matrix
+		for (int i = 0; i < 3; ++i)
+		{
+			for (int j = 0; j < 3; ++j) { hmdMatrix.m[i][j] = niTransform.rotate.entry[i][j]; }
+		}
+
+		// Copy translation vector
+		hmdMatrix.m[0][3] = niTransform.translate.x;
+		hmdMatrix.m[1][3] = niTransform.translate.y;
+		hmdMatrix.m[2][3] = niTransform.translate.z;
+
+		return hmdMatrix;
 	}
 
 	// each button id is mapped to a list of callback funcs
@@ -63,7 +95,7 @@ namespace vrinput
 	void StopBlockingAll() { block_all_inputs = false; }
 	bool isBlockingAll() { return block_all_inputs; }
 
-	void StartSmoothing(int a_damping_factor) { smoothing_window = a_damping_factor; }
+	void StartSmoothing() { smoothing_window = 1; }
 	void StopSmoothing() { smoothing_window = 0; }
 
 	void AddCallback(const vr::EVRButtonId a_button, const InputCallbackFunc a_callback,
@@ -186,31 +218,47 @@ namespace vrinput
 		VR_ARRAY_COUNT(unGamePoseArrayCount) vr::TrackedDevicePose_t*  pGamePoseArray,
 		uint32_t                                                       unGamePoseArrayCount)
 	{
-		if (smoothing_window > 0)
+		for (auto isLeft : { true, false })
 		{
-			for (auto isLeft : { true, false })
+			auto dev = isLeft ? g_leftcontroller : g_rightcontroller;
+			if (smoothing_window)
 			{
-				auto dev = isLeft ? g_leftcontroller : g_rightcontroller;
-				if (pGamePoseArray[dev].bPoseIsValid)
+				auto pre = HmdMatrixToNiTransform(simple_buffer[isLeft].mDeviceToAbsoluteTracking);
+				auto cur = HmdMatrixToNiTransform(pGamePoseArray[dev].mDeviceToAbsoluteTracking);
+
+				// TODO: real filtering algorithm
+				// simple noise gate
+				constexpr float low_rate = 0.04f;
+				constexpr float mid_rate = 0.14f;
+				constexpr float high_rate = 0.2f;
+				constexpr float low_threshold = 0.003f * 0.003f;
+				constexpr float mid_threshold = 0.008f * 0.008f;
+				constexpr float high_threshold = 0.05f * 0.05f;
+
+				auto dist = pre.translate.GetSquaredDistance(cur.translate);
+
+				if (dist > high_threshold)
 				{
-					pose_buffer[isLeft].push_front(pGamePoseArray[dev]);
+					pre.translate = helper::LinearInterp(pre.translate, cur.translate, high_rate);
+				}
+				else if (dist > mid_threshold)
+				{
+					pre.translate = helper::LinearInterp(pre.translate, cur.translate, mid_rate);
+				}
+				else if (dist > low_threshold)
+				{
+					pre.translate = helper::LinearInterp(pre.translate, cur.translate, low_rate);
 				}
 
-				while (pose_buffer[isLeft].size() > smoothing_window)
-				{
-					pose_buffer[isLeft].pop_back();
-				}
+				//pre = HmdMatrixToNiTransform(simple_buffer[isLeft].mDeviceToAbsoluteTracking);
 
-				pGamePoseArray[dev] = std::accumulate(pose_buffer[isLeft].begin(),
-					pose_buffer[isLeft].end(), TrackedDevicePose_t{},
-					[](const TrackedDevicePose_t& acc, const TrackedDevicePose_t& element) {
-						return acc + element;
-					});
+				// adaptive slerp?
+				pre.rotate = helper::slerpMatrixAdaptive(pre.rotate, cur.rotate);
 
-				pGamePoseArray[dev] /= pose_buffer[isLeft].size();
-				SKSE::log::trace(
-					"{} {}", pGamePoseArray[dev].bPoseIsValid, pGamePoseArray[dev].bPoseIsValid);
+				pGamePoseArray[dev].mDeviceToAbsoluteTracking = NiTransformToHmdMatrix(pre);
+				simple_buffer[isLeft] = pGamePoseArray[dev];
 			}
+			else { simple_buffer[isLeft] = pGamePoseArray[dev]; }
 		}
 		return vr::EVRCompositorError::VRCompositorError_None;
 	}

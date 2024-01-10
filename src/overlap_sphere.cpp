@@ -5,7 +5,13 @@ namespace vrinput
 	using namespace RE;
 	using namespace art_addon;
 
-	const bool OverlapSphere::is_overlapping(bool isLeft) { return overlap_state[isLeft]; };
+	const bool OverlapSphere::is_overlapping(bool isLeft) { return overlap_state[isLeft]; }
+
+	std::weak_ptr<art_addon::ArtAddon> OverlapSphere::Get3D()
+	{
+		std::weak_ptr<art_addon::ArtAddon> weak = visible_debug_sphere;
+		return weak;
+	};
 
 	std::shared_ptr<OverlapSphere> OverlapSphere::Make(RE::NiAVObject* a_attach_to,
 		OverlapCallback a_callback, float a_radius, float a_max_angle_deg, Hand a_active_hand,
@@ -18,7 +24,7 @@ namespace vrinput
 		new_obj->callback = a_callback;
 		new_obj->which_hand_activates = a_active_hand;
 		new_obj->squared_radius = a_radius * a_radius;
-		new_obj->max_angle = helper::deg_to_rad(a_max_angle_deg);
+		new_obj->max_angle = helper::deg2rad(a_max_angle_deg);
 		new_obj->local_position = a_offset;
 		new_obj->normal = a_normal;
 		new_obj->id = OverlapSphereManager::GetSingleton()->GetNextId();
@@ -64,7 +70,7 @@ namespace vrinput
 								if (sphere->local_position != NiPoint3::Zero())
 								{
 									sphere_world = node->world.translate +
-									               node->world.rotate * sphere->local_position;
+										node->world.rotate * sphere->local_position;
 								}
 								else { sphere_world = node->world.translate; }
 
@@ -102,7 +108,7 @@ namespace vrinput
 										else if ((dist > sphere->squared_radius + kHysteresis ||
 													 angle >
 														 sphere->max_angle + kHysteresisAngular) &&
-												 sphere->overlap_state[(bool)hand])
+											sphere->overlap_state[(bool)hand])
 										{
 											sphere->overlap_state[(bool)hand] = false;
 											changed = SendEvent(*sphere, false, hand);
@@ -122,7 +128,7 @@ namespace vrinput
 													helper::SetGlowColor(visible_node, on);
 												}
 												else if (!sphere->overlap_state[0] &&
-														 !sphere->overlap_state[1])
+													!sphere->overlap_state[1])
 												{
 													helper::SetGlowColor(visible_node, off_);
 												}
@@ -204,6 +210,7 @@ namespace vrinput
 		}
 		if (auto attach = player->Get3D(false)->GetObjectByName(a_s.attach_node->name))
 		{
+			t.scale /= attach->local.scale;
 			return ArtAddon::Make(kModelPath, player->AsReference(), attach, t);
 		}
 		else { return nullptr; }

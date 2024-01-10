@@ -36,6 +36,7 @@ namespace art_addon
 
 		/** Returns: Pointer to the attached NiAVObject. nullptr if initialization hasn't finished. */
 		RE::NiAVObject* const Get3D() { return root3D; }
+		RE::NiAVObject* const GetParent() { return attach_node; }
 
 	private:
 		ArtAddon() = default;

@@ -1,5 +1,6 @@
 #pragma once
 #include "VR/PapyrusVRAPI.h"
+#include "helper_math.h"
 
 namespace vrinput
 {
@@ -8,6 +9,7 @@ namespace vrinput
 
 	extern vr::TrackedDeviceIndex_t g_leftcontroller;
 	extern vr::TrackedDeviceIndex_t g_rightcontroller;
+	extern float                    adjustable;
 
 	enum class Hand
 	{
@@ -81,7 +83,7 @@ namespace vrinput
 	void StopBlockingAll();
 	bool isBlockingAll();
 
-	void StartSmoothing(int a_damping_factor);
+	void StartSmoothing();
 	void StopSmoothing();
 
 	bool ControllerInput_CB(vr::TrackedDeviceIndex_t unControllerDeviceIndex,
