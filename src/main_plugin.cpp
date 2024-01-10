@@ -40,8 +40,6 @@ namespace wearable_plugin
 
 	std::shared_ptr<Wearable> w;
 
-	int c = 0;
-
 	bool OnDEBUGBtnPressA(const ModInputEvent& e)
 	{
 		if (e.button_state == ButtonState::kButtonDown)
@@ -50,8 +48,8 @@ namespace wearable_plugin
 
 			if (!menuchecker::isGameStopped())
 			{
-				vrinput::StartSmoothing(c++);
-				SKSE::log::trace("{}", c);
+				vrinput::adjustable += 0.002;
+				SKSE::log::trace("{}", vrinput::adjustable);
 			}
 		}
 		return false;
@@ -65,10 +63,13 @@ namespace wearable_plugin
 			SKSE::log::trace("B press");
 			if (!menuchecker::isGameStopped())
 			{
-				vrinput::StartSmoothing(--c);
-				SKSE::log::trace("{}", c);
+				vrinput::adjustable -= 0.002;
+
+				SKSE::log::trace("{}", vrinput::adjustable);
+
 				static bool toggle = false;
-				if (toggle ^= 1)
+				toggle ^= 1;
+				if (toggle)
 					vrinput::OverlapSphereManager::GetSingleton()->ShowDebugSpheres();
 				else
 					vrinput::OverlapSphereManager::GetSingleton()->HideDebugSpheres();
@@ -109,16 +110,26 @@ namespace wearable_plugin
 
 		//OverlapSphereManager::GetSingleton()->ShowDebugSpheres();
 		w.reset();
-		NiTransform                   t;
+		NiTransform t;
+		t.rotate = { { -0.22850621, -0.9327596, -0.2670444 },
+			{ -0.9581844, 0.21687761, 0.08220619 }, { -0.020597734, 0.2866351, -0.9453561 } };
+		t.translate = { 0.028520077, 0.91731554, 4.03214 };
 		std::vector<std::string>      names = { "meter1" };
-		std::vector<Meter::MeterType> av = { Meter::MeterType::kHealth };
+		std::vector<const char*>      parents = { "NPC L ForearmTwist1 [LLt1]",
+				 "NPC L ForearmTwist2 [LLt2]", "NPC L Forearm [LLar]", "NPC L Hand [LHnd]" };
+		std::vector<Meter::MeterType> types = { Meter::MeterType::kHealth,
+			Meter::MeterType::kMagicka, Meter::MeterType::kStamina, Meter::MeterType::kAmmo,
+			Meter::MeterType::kEnchantLeft, Meter::MeterType::kEnchantRight,
+			Meter::MeterType::kShout, Meter::MeterType::kStealth, Meter::MeterType::kTime };
 
 		w = std::make_shared<Meter>("armor/SoulGauge/Mara-attach.nif",
-			player->Get3D(false)->GetObjectByName("NPC L Hand [LHnd]"), t, av, names);
+			player->Get3D(false)->GetObjectByName("NPC L Hand [LHnd]"), t, NiPoint3(-2.0f, 0, 0),
+			types, names, &parents);
+
 		WearableManager::GetSingleton()->Register(w);
 	}
 
-	void PreGameLoad() { WearableManager::GetSingleton()->TransitionState(DressingState::kNone); }
+	void PreGameLoad() { WearableManager::GetSingleton()->TransitionState(ManagerState::kNone); }
 
 	void StartMod()
 	{

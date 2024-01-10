@@ -7,6 +7,9 @@
 
 namespace vrinput
 {
+	constexpr const char* kDebugAxisModelPath = "debug/HelperSphereAxis.nif";
+	constexpr const char* kDebugModelPath = "debug/HelperSphere.nif";
+
 	struct OverlapEvent
 	{
 		bool entered;
@@ -32,8 +35,10 @@ namespace vrinput
 
 		~OverlapSphere() = default;
 
-		const bool is_overlapping(bool a_isLeft);
-		const int  GetId() { return id; }
+		const bool                         is_overlapping(bool a_isLeft);
+		const int                          GetId() { return id; }
+		const float                        GetRadius() { return std::sqrt(squared_radius); }
+		std::weak_ptr<art_addon::ArtAddon> Get3D();
 
 	private:
 		OverlapSphere() = default;

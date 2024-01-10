@@ -19,6 +19,7 @@ namespace wearable_plugin
 	extern OpenVRHookManagerAPI*            g_OVRHookManager;
 	extern PapyrusVR::VRManagerAPI*         g_VRManager;
 
+
 	void StartMod();
 	void DataLoaded();
 	void GameLoad();
