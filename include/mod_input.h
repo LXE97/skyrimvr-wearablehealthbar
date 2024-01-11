@@ -6,6 +6,7 @@ namespace vrinput
 {
 	constexpr const char* kLeftHandNodeName = "NPC L Hand [LHnd]";
 	constexpr const char* kRightHandNodeName = "NPC R Hand [RHnd]";
+	constexpr const char* kControllerNodeName[2] = { kRightHandNodeName, kLeftHandNodeName };
 
 	extern vr::TrackedDeviceIndex_t g_leftcontroller;
 	extern vr::TrackedDeviceIndex_t g_rightcontroller;

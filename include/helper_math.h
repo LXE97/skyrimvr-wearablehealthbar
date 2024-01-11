@@ -44,9 +44,6 @@ namespace helper
 
 	RE::NiPoint3 LinearInterp(const RE::NiPoint3& v1, const RE::NiPoint3& v2, float interp);
 
-	NiPoint3 GetPalmVectorWS(NiMatrix3& handRotation, bool isLeft);
-	NiPoint3 GetThumbVector(NiMatrix3& handRotation);
-
 	// matrix stuff
 
 	// Gets a rotation matrix from an axis and an angle
@@ -75,12 +72,7 @@ namespace helper
 		return result;
 	}
 
-	inline void MirrorLeftHand(NiMatrix3& leftm)
-	{
-		leftm.entry[0][1] *= -1.0f;
-		leftm.entry[1][1] *= -1.0f;
-		leftm.entry[2][0] *= -1.0f;
-	}
+	
 
 	inline NiMatrix3 RotateBetweenVectors(const NiPoint3& src, const NiPoint3& dest)
 	{
@@ -91,8 +83,8 @@ namespace helper
 		if (axis.Length() < 0.9995f)
 		{  // Handle the case where the vectors are collinear
 			axis = src.UnitCross(RE::NiPoint3(std::rand() / RAND_MAX, std::rand() / RAND_MAX, 0));
-			angle *= -1;
-		}
+		} // also need to handle case where the angle is extremely small?
+			
 		return helper::getRotationAxisAngle(axis, angle);
 	}
 

@@ -61,7 +61,7 @@ namespace art_addon
 									addon->root3D = a_modelEffect.Get3D()->Clone();
 									addon->attach_node->AsNode()->AttachChild(addon->root3D);
 									//SKSE::log::trace("deleting MRE: {}", id);
-									a_modelEffect.Detach();
+									a_modelEffect.lifetime = 0;
 									addon->root3D->local = std::move(addon->local);
 								}
 							} else
@@ -72,7 +72,7 @@ namespace art_addon
 									});
 								if (it != artobject_cache.end())
 								{  // the artAddon was deleted before initialization finished
-									a_modelEffect.Detach();
+									a_modelEffect.lifetime = 0;
 									SKSE::log::trace("deleting MRE {} (orphaned)", id);
 								}
 							}

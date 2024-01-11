@@ -87,6 +87,8 @@ namespace wearable_plugin
 #endif
 
 		ArtAddonManager::GetSingleton()->Update();
+		OverlapSphereManager::GetSingleton()->Update();
+		WearableManager::GetSingleton()->Update();
 
 #ifdef PROFILE
 		auto end = std::chrono::steady_clock::now();
@@ -144,26 +146,10 @@ namespace wearable_plugin
 			// TODO: read this from config
 			g_higgs_palmPosHandspace = { 0, -2.4, 6 };
 
-			g_higgsInterface->AddPostVrikPostHiggsCallback(&Update);
-
 			vrinput::OverlapSphereManager::GetSingleton()->SetPalmOffset(g_higgs_palmPosHandspace);
 		}
 
 		// Other Manager setup
-
-		// TODO: workaround for problem with accessing post-VRIK-update third person skeleton
-		std::thread p1([]() {
-			while (1)
-			{
-				if (vrinput::OverlapSphereManager::GetSingleton()->Update())
-				{
-					WearableManager::GetSingleton()->Update();
-				}
-
-				std::this_thread::sleep_for(std::chrono::milliseconds(30));
-			}
-		});
-		p1.detach();
 
 		// register event sinks and handlers
 		vrinput::AddCallback(vr::k_EButton_A, OnDEBUGBtnPressA, Hand::kRight, ActionType::kPress);
