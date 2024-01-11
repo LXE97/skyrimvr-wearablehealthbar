@@ -93,12 +93,11 @@ namespace wearable
 					if (auto colorUI = mgr->configmode_colorwheel->Get3D())
 					{
 						auto color_normal = colorUI->world.rotate * NiPoint3(1, 0, 0);
-						auto vector_to_head = colorUI->parent->world.translate -
-							colorUI->world.translate;
+						auto vector_to_head =
+							colorUI->parent->world.translate - colorUI->world.translate;
 						vector_to_head.z = 0;
 
-						colorUI->local.rotate = colorUI->parent->world.rotate.Transpose() *
-							helper::RotateBetweenVectors(color_normal, vector_to_head);
+						colorUI->local.rotate = colorUI->parent->world.rotate.Transpose();
 					}
 				}
 			}
@@ -153,12 +152,13 @@ namespace wearable
 
 	void WearableManager::Update()
 	{
+		// 1. State transitions
 		if (configmode_next_state != configmode_state) { TransitionState(configmode_next_state); }
 
 		if (!managed_objects.empty())
 		{
 			std::scoped_lock lock(managed_objects_lock);
-
+			// 2. Process active configuration mode
 			if (configmode_state != ManagerState::kNone && configmode_state != ManagerState::kIdle)
 			{
 				if (auto sp = configmode_selected_item.lock())
@@ -168,8 +168,10 @@ namespace wearable
 						NiUpdateData ctx;
 
 						auto hand_world =
-							*vrinput::OverlapSphereManager::GetSingleton()->GetCachedHand(
-								(bool)configmode_active_hand);
+							PlayerCharacter::GetSingleton()
+								->GetNodeByName(
+									vrinput::kControllerNodeName[(int)configmode_active_hand])
+								->world;
 
 						auto hand_delta =
 							hand_world.translate.GetDistance(configmode_hand_initial.translate);
@@ -230,9 +232,8 @@ namespace wearable
 											}
 										}
 									}
-
-									SKSE::log::trace("success");
 								}
+								node->Update(ctx);
 							}
 							break;
 						case ManagerState::kScale:
@@ -269,19 +270,120 @@ namespace wearable
 								{
 									if (auto colorUI = configmode_colorwheel->Get3D())
 									{
-										auto item_hand =
-											vrinput::OverlapSphereManager::GetSingleton()
-												->GetCachedHand((bool)vrinput::GetOtherHand(
-													configmode_active_hand))
-												->translate;
+										// Update UI position
+										auto item_hand_pos =
+											PlayerCharacter::GetSingleton()
+												->GetNodeByName(vrinput::kControllerNodeName[(int)
+														vrinput::GetOtherHand(
+															configmode_active_hand)])
+												->world.translate;
 
-										if (colorUI->world.translate.GetSquaredDistance(item_hand) >
-											kColorLeashDistance)
+										auto vector_to_camera =
+											PlayerCharacter::GetSingleton()
+												->GetNodeByName("NPC Head [Head]")
+												->world.translate -
+											item_hand_pos;
+
+										float heading =
+											std::atan2f(vector_to_camera.y, vector_to_camera.x);
+
+										colorUI->local.rotate.SetEulerAnglesXYZ({ 0, 0, -heading });
+										colorUI->local.rotate =
+											colorUI->parent->world.rotate.Transpose() *
+											colorUI->local.rotate;
+
+										colorUI->local.translate =
+											colorUI->parent->world.rotate.Transpose() *
+											(item_hand_pos - colorUI->parent->world.translate);
+										colorUI->local.translate += { 0, 0, 12 };
+										colorUI->Update(ctx);
+										NiTransform t;
+										t.translate = { -4, 0, 0 };
+										if (!testt)
 										{
-											colorUI->local.translate =
-												colorUI->parent->world.rotate.Transpose() *
-												(item_hand - colorUI->parent->world.translate);
-											colorUI->local.translate += { 0, 0, 8 };
+											testt = ArtAddon::Make(vrinput::kDebugModelPath,
+												PlayerCharacter::GetSingleton()->AsReference(),
+												colorUI, t);
+										}
+										else
+										{
+											// Calculate finger location in UI plane
+											auto finger =
+												PlayerCharacter::GetSingleton()
+													->GetNodeByName("NPC R Finger12 [RF12]")
+													->world;
+											auto vector_to_finger = finger.translate +
+												(finger.rotate * NiPoint3(0, 0, 2)) -
+												colorUI->world.translate;
+
+											if (auto testnode = testt->Get3D())
+											{
+												testnode->local.translate =
+													testnode->parent->world.rotate.Transpose() *
+													vector_to_finger;
+											}
+
+											auto local = colorUI->world.rotate.Transpose() *
+												vector_to_finger;
+
+											constexpr float       extent_top = 7;
+											constexpr float       extent_bottom = -7;
+											constexpr float       extent_colorwheel_right = 7;
+											constexpr float       extent_colorwheel_left = -7;
+											constexpr float       extent_valueslider_left = 10;
+											constexpr float       extent_valueslider_right = 13;
+											constexpr float       extent_glowslider_left = -13;
+											constexpr float       extent_glowslider_right = -10;
+											constexpr const char* color_name = "cursor_color";
+											constexpr const char* value_name = "cursor_value";
+											constexpr const char* glow_name = "cursor_glow";
+
+											float depth = local.x;
+											float y = local.z;
+											float x = local.y;
+
+											if (depth > -3 && depth < 1)
+											{
+												// check which element is touching
+												if (y < extent_top && y > extent_bottom)
+												{
+													if (x < extent_glowslider_right &&
+														x > extent_glowslider_left)
+													{
+														// glow slider
+														auto sliderval = (y - extent_bottom) /
+															(extent_top - extent_bottom);
+														if (auto cursor = colorUI->GetObjectByName(
+																glow_name))
+														{
+															cursor->local.translate.z = y;
+														}
+													}
+													else if (x < extent_valueslider_right &&
+														x > extent_valueslider_left)
+													{
+														// value slider
+														auto sliderval = (y - extent_bottom) /
+															(extent_top - extent_bottom);
+														if (auto cursor = colorUI->GetObjectByName(
+																value_name))
+														{
+															cursor->local.translate.z = y;
+														}
+													}
+													else if (x < extent_colorwheel_right &&
+														x > extent_colorwheel_left)
+													{
+														// color wheel
+														if (auto cursor = colorUI->GetObjectByName(
+																color_name))
+														{
+															cursor->local.translate.z = y;
+                                                            cursor->local.translate.y = x;
+														}
+													}
+												}
+											}
 										}
 									}
 								}
@@ -290,11 +392,10 @@ namespace wearable
 						case ManagerState::kCycleAV:
 							break;
 						}
-
-						node->Update(ctx);
 					}
 				}
 			}
+
 			else
 			{
 				for (auto it = managed_objects.begin(); it != managed_objects.end();)
@@ -303,8 +404,10 @@ namespace wearable
 					{
 						if (sp->model->Get3D())
 						{
+							// 3. Call individual update functions
 							if (sp->interactable) { sp->Update(); }
 							else
+							// 4. Attach overlap spheres to newly-created geometry
 							{
 								sp->interactable = vrinput::OverlapSphere::Make(sp->model->Get3D(),
 									OverlapHandler, settings.overlap_radius, settings.overlap_angle,
@@ -361,8 +464,6 @@ namespace wearable
 							// switch to new closest parent
 							if (!configmode_skeletons.empty())
 							{
-								SKSE::log::trace("do thing2");
-
 								if (auto closest = FindClosestSkeleton(node).lock())
 								{
 									auto closest_parent = closest->GetParent();
@@ -377,15 +478,15 @@ namespace wearable
 									sp->attach_node = closest->GetParent();
 								}
 								configmode_skeletons.clear();
-
-								SKSE::log::trace("do 2thingood");
 							}
 						}
 					}
 				}
 				break;
 			case ManagerState::kColor:
+				testt.reset();
 				configmode_colorwheel.reset();
+
 				g_vrikInterface->restoreFingers((bool)configmode_active_hand);
 				break;
 			default:
@@ -463,8 +564,6 @@ namespace wearable
 
 	std::weak_ptr<Wearable> WearableManager::FindWearableWithOverlapID(int a_id)
 	{
-		std::scoped_lock lock(managed_objects_lock);
-
 		auto it =
 			std::find_if(managed_objects.begin(), managed_objects.end(), [a_id](const auto& obj) {
 				return obj.expired() ? false : obj.lock()->interactable->GetId() == a_id;
@@ -487,7 +586,13 @@ namespace wearable
 			if (const auto processLists = ProcessLists::GetSingleton())
 			{
 				processLists->ForEachShaderEffect([](ShaderReferenceEffect& a_shader_effect) {
-					if (a_shader_effect.lifetime == shader_ID) { a_shader_effect.Detach(); }
+					if (a_shader_effect.lifetime == shader_ID)
+					{
+						SKSE::log::trace("shader removed on {} {} {}",
+							a_shader_effect.target.get()->GetName(), a_shader_effect.lifetime,
+							shader_ID);
+						a_shader_effect.lifetime = 0;
+					}
 					return BSContainer::ForEachResult::kContinue;
 				});
 			}
@@ -541,8 +646,9 @@ namespace wearable
 				configmode_wearable_initial_world = target->world;
 				configmode_wearable_initial_local = target->local;
 				configmode_hand_initial =
-					*vrinput::OverlapSphereManager::GetSingleton()->GetCachedHand(
-						(bool)configmode_active_hand);
+					PlayerCharacter::GetSingleton()
+						->GetNodeByName(vrinput::kControllerNodeName[(int)configmode_active_hand])
+						->world;
 			}
 		}
 	}

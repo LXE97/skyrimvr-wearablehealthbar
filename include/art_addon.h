@@ -17,14 +17,16 @@ namespace art_addon
 		friend class ArtAddonManager;
 
 	public:
-		/** Returns: nullptr if modelPath is invalid
+		/** Returns: shared_ptr, nullptr if modelPath or target is invalid
 		 * 
-		 * Constructs a new ArtAddon and queues the creation of its 3D model.
+		 * Constructs a new ArtAddon and queues the creation of its 3D model. The model is not 
+		 * saved to the savefile but it will persist through game loads for the lifetime of the
+		 * returned pointer.
          * 
-         * modelPath:   path to the *.nif file relative to Data/meshes/
-         * target:      object to attach the 3D to
-         * attachNode:  parent node for the new 3D, must be a 3rd person node for the player
-         * local:       transform relative to the attachNode
+         * a_model_path:	path to the *.nif file relative to Data/meshes/
+         * a_target:		object to attach the 3D to
+         * a_attach_node:	parent node for the new 3D, must be a 3rd person node for the player
+         * a_local:      	transform relative to the attachNode
 		 */
 		static ArtAddonPtr Make(const char* a_model_path, RE::TESObjectREFR* a_target,
 			RE::NiAVObject* a_attach_node, RE::NiTransform& a_local);

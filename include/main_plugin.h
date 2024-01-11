@@ -24,6 +24,7 @@ namespace wearable_plugin
 	void DataLoaded();
 	void GameLoad();
 	void PreGameLoad();
+	void Update();
 
 	bool OnDEBUGBtnPressA();
 	bool OnDEBUGBtnPressB();

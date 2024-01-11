@@ -20,7 +20,7 @@ bool                                         g_pluginError = false;
 void InitializeHooking()
 {
 	auto& trampoline = SKSE::GetTrampoline();
-	trampoline.create(14);
+	trampoline.create(128);
 }
 
 // Main plugin entry point.

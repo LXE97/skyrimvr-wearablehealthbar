@@ -60,11 +60,14 @@ namespace wearable
 
 		Settings&          GetSettings() { return settings; }
 		ManagerState const GetState() { return configmode_state; }
-		void const         SetState(ManagerState a_next) { configmode_next_state = a_next; }
+		void const         SetState(ManagerState a_next)
+		{
+			configmode_next_state = a_next;
+		}
 
 	private:
 		static constexpr const char* kColorWheelModelPath = "colorwheel.nif";
-		static constexpr float              kColorLeashDistance = 0.f;
+		static constexpr float       kColorLeashDistance = 400.f;
 
 		WearableManager();
 		~WearableManager() = default;
@@ -99,7 +102,7 @@ namespace wearable
 		RE::TESEffectShader*                 shader = nullptr;
 		RE::NiColor                          bone_on;
 		RE::NiColor                          bone_off;
-		ManagerState                         configmode_state = ManagerState::kNone;
+		std::atomic<ManagerState>            configmode_state = ManagerState::kNone;
 		ManagerState                         configmode_next_state = ManagerState::kNone;
 		RE::NiTransform                      configmode_wearable_initial_world;
 		RE::NiTransform                      configmode_wearable_initial_local;
@@ -109,6 +112,7 @@ namespace wearable
 		vrinput::Hand                        configmode_active_hand;
 		std::vector<art_addon::ArtAddonPtr>  configmode_skeletons;
 		art_addon::ArtAddonPtr               configmode_colorwheel;
+		art_addon::ArtAddonPtr               testt;
 	};
 
 	/** Represents a model attached to the player body with an accompanying interaction sphere

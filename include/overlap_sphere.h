@@ -70,20 +70,14 @@ namespace vrinput
 			return &singleton;
 		}
 
-		/** temporary workaround - returns true if hand position is ok */
-		bool Update();
+		void Update();
 		void ShowDebugSpheres();
 		void HideDebugSpheres();
 		void SetPalmOffset(const RE::NiPoint3& a_offset);
 
-		RE::NiTransform* GetCachedHand(bool isLeft) { return &(hand_transform_cache[isLeft]); }
-
 	private:
 		static constexpr float        kHysteresis = 20.f;
 		static constexpr RE::NiPoint3 kHandPalmNormal = { 0, -1, 0 };
-		static constexpr const char*  kModelPath = "debug/debugsphere.nif";
-		static constexpr const char*  kControllerNodeName[2] = { "NPC R Hand [RHnd]",
-			 "NPC L Hand [LHnd]" };
 		const float                   kHysteresisAngular = helper::deg2rad(3);
 		const float                   kModelScale = 1.0f;
 		const int                     kOnHexColor = 0xffdc00;
