@@ -1,4 +1,4 @@
-#undef PROFILE
+#define PROFILE
 
 #include "main_plugin.h"
 
@@ -39,7 +39,7 @@ namespace wearable_plugin
 	void OnOverlap(const OverlapEvent& e) {}
 
 	std::shared_ptr<Wearable> w;
-
+ArtAddonPtr x;
 	bool OnDEBUGBtnPressA(const ModInputEvent& e)
 	{
 		if (e.button_state == ButtonState::kButtonDown)
@@ -48,6 +48,9 @@ namespace wearable_plugin
 
 			if (!menuchecker::isGameStopped())
 			{
+				NiTransform l;
+				l.translate.z = 10;
+				x = NifChar::Make('a', vrinput::GetHandNode(Hand::kRight, false), l);
 				vrinput::adjustable += 0.002;
 				SKSE::log::trace("{}", vrinput::adjustable);
 			}
@@ -81,7 +84,7 @@ namespace wearable_plugin
 	void Update()
 	{
 #ifdef PROFILE
-		static std::vector<long> update_times;
+		static std::vector<long long> update_times;
 
 		auto start = std::chrono::steady_clock::now();
 #endif
@@ -153,6 +156,7 @@ namespace wearable_plugin
 
 		// register event sinks and handlers
 		vrinput::AddCallback(vr::k_EButton_A, OnDEBUGBtnPressA, Hand::kRight, ActionType::kPress);
+		
 		vrinput::AddCallback(
 			vr::k_EButton_ApplicationMenu, OnDEBUGBtnPressB, Hand::kRight, ActionType::kPress);
 	}
@@ -174,8 +178,8 @@ namespace wearable_plugin
 				vrinput::g_rightcontroller =
 					g_OVRHookManager->GetVRSystem()->GetTrackedDeviceIndexForControllerRole(
 						vr::TrackedControllerRole_RightHand);
-				g_OVRHookManager->RegisterControllerStateCB(vrinput::ControllerInput_CB);
-				g_OVRHookManager->RegisterGetPosesCB(vrinput::cbFuncGetPoses);
+				g_OVRHookManager->RegisterControllerStateCB(vrinput::ControllerInputCallback);
+				g_OVRHookManager->RegisterGetPosesCB(vrinput::ControllerPoseCallback);
 			}
 		}
 	}

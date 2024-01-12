@@ -4,7 +4,7 @@
 namespace helper
 {
 	RE::TESForm* LookupByName(RE::FormType a_typeEnum, const char* a_name);
-	RE::FormID GetFullFormID(uint8_t a_modindex, RE::FormID a_localID);
+	RE::FormID   GetFullFormID(uint8_t a_modindex, RE::FormID a_localID);
 
 	void CastSpellInstant(RE::Actor* a_src, RE::Actor* a_target, RE::SpellItem* sa_pell);
 	void Dispel(RE::Actor* a_src, RE::Actor* a_target, RE::SpellItem* a_spell);
@@ -20,6 +20,7 @@ namespace helper
 	void SetSpecularMult();
 	void SetSpecularColor();
 	void SetTintColor();
+	void SetUVCoords(RE::NiAVObject* a_target, float a_x, float a_y);
 
 	void PrintPlayerModelEffects();
 	void PrintPlayerShaderEffects();

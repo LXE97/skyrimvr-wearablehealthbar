@@ -40,12 +40,14 @@ namespace art_addon
 		RE::NiAVObject* const Get3D() { return root3D; }
 		RE::NiAVObject* const GetParent() { return attach_node; }
 
-	private:
+	protected:
 		ArtAddon() = default;
 		ArtAddon(const ArtAddon&) = delete;
 		ArtAddon(ArtAddon&&) = delete;
 		ArtAddon& operator=(const ArtAddon&) = delete;
 		ArtAddon& operator=(ArtAddon&&) = delete;
+
+		virtual inline void OnModelCreation() {}
 
 		RE::NiAVObject*    root3D = nullptr;
 		RE::TESObjectREFR* target = nullptr;
@@ -57,6 +59,7 @@ namespace art_addon
 	class ArtAddonManager
 	{
 		friend ArtAddon;
+		friend class NifChar;
 
 	public:
 		/** Must be called every frame. It only takes 1 frame to create all the models and remove 
@@ -85,6 +88,49 @@ namespace art_addon
 		std::unordered_map<const char*, RE::BGSArtObject*> artobject_cache;
 		RE::BGSArtObject*                                  base_artobject;
 		int                                                next_id = -2;
+	};
+
+	class NifChar : public ArtAddon
+	{
+		friend class ArtAddonManager;
+
+	public:
+		static ArtAddonPtr Make(char a_ascii, RE::NiAVObject* a_parent, RE::NiTransform& a_local);
+
+	private:
+		static constexpr float       kUVOffset_x = 0.0625f;
+		static constexpr float       kUVOffset_y = 0.125f;
+		static constexpr const char* kFontModelPath = "ArtAddon/char.nif";
+
+		void                OnModelCreation() override;
+		inline RE::NiPoint2 AsciiToXY(char a_ascii)
+		{
+			char temp = a_ascii - ' ';
+			return RE::NiPoint2((temp % 16) * kUVOffset_x, (temp / 16) * kUVOffset_y);
+		}
+
+		char ascii;
+	};
+
+	class NifTextBox
+	{
+	public:
+		NifTextBox(const char* a_string, const float a_spacing, RE::NiAVObject* a_attach_to,
+			RE::NiTransform& a_local) :
+			string(a_string),
+			spacing(a_spacing)
+		{}
+		~NifTextBox() { characters.clear(); }
+
+	private:
+		static constexpr const char* kEmpty = "meshes/effects/fxemptyobject.nif";
+
+		void MakeString();
+
+		ArtAddonPtr              root;
+		std::vector<ArtAddonPtr> characters;
+		const char*              string;
+		const float              spacing;
 	};
 
 }
