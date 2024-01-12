@@ -89,17 +89,40 @@ namespace helper
 	{
 		if (a_target)
 		{
-			auto geometry =
-				a_target->GetFirstGeometryOfShaderType(RE::BSShaderMaterial::Feature::kGlowMap);
-			if (geometry)
+			if (auto geometry =
+					a_target->GetFirstGeometryOfShaderType(RE::BSShaderMaterial::Feature::kGlowMap))
 			{
-				auto shaderProp = geometry->GetGeometryRuntimeData()
-									  .properties[RE::BSGeometry::States::kEffect]
-									  .get();
-				if (shaderProp)
+				if (auto shaderProp = geometry->GetGeometryRuntimeData()
+										  .properties[RE::BSGeometry::States::kEffect]
+										  .get())
 				{
-					auto shader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProp);
-					if (shader) { shader->emissiveColor = c; }
+					if (auto shader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProp))
+					{
+						shader->emissiveColor = c;
+					}
+				}
+			}
+		}
+	}
+
+	void SetUVCoords(NiAVObject* a_target, float a_x, float a_y)
+	{
+		if (a_target)
+		{
+			if (auto geometry =
+					a_target->GetFirstGeometryOfShaderType(BSShaderMaterial::Feature::kNone))
+			{
+				if (auto shaderProp = geometry->GetGeometryRuntimeData()
+										  .properties[RE::BSGeometry::States::kEffect]
+										  .get())
+				{
+					if (auto shader = netimmerse_cast<RE::BSShaderProperty*>(shaderProp))
+					{
+						shader->material->texCoordOffset[0].x = a_x;
+						shader->material->texCoordOffset[0].y = a_y;
+						shader->material->texCoordOffset[1].x = a_x;
+						shader->material->texCoordOffset[1].y = a_y;
+					}
 				}
 			}
 		}

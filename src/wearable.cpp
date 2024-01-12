@@ -126,6 +126,22 @@ namespace wearable
 
 	bool WearableManager::CycleAVControl(const vrinput::ModInputEvent& e) { return false; }
 
+	bool WearableManager::LeftStick(const vrinput::ModInputEvent& e)
+	{
+		auto mgr = WearableManager::GetSingleton();
+
+		if (e.button_state == vrinput::ButtonState::kButtonDown) { mgr->CycleSelection(false); }
+		return false;
+	}
+
+	bool WearableManager::RightStick(const vrinput::ModInputEvent& e)
+	{
+		auto mgr = WearableManager::GetSingleton();
+
+		if (e.button_state == vrinput::ButtonState::kButtonDown) { mgr->CycleSelection(true); }
+		return false;
+	}
+
 	void WearableManager::OverlapHandler(const vrinput::OverlapEvent& e)
 	{
 		auto mgr = WearableManager::GetSingleton();
@@ -353,8 +369,8 @@ namespace wearable
 														// glow slider
 														auto sliderval = (y - extent_bottom) /
 															(extent_top - extent_bottom);
-														if (auto cursor = colorUI->GetObjectByName(
-																glow_name))
+														if (auto cursor =
+																colorUI->GetObjectByName(glow_name))
 														{
 															cursor->local.translate.z = y;
 														}
@@ -379,7 +395,7 @@ namespace wearable
 																color_name))
 														{
 															cursor->local.translate.z = y;
-                                                            cursor->local.translate.y = x;
+															cursor->local.translate.y = x;
 														}
 													}
 												}
@@ -407,7 +423,7 @@ namespace wearable
 							// 3. Call individual update functions
 							if (sp->interactable) { sp->Update(); }
 							else
-							// 4. Attach overlap spheres to newly-created geometry
+							// 4. Attach overlap spheres if needed
 							{
 								sp->interactable = vrinput::OverlapSphere::Make(sp->model->Get3D(),
 									OverlapHandler, settings.overlap_radius, settings.overlap_angle,
@@ -432,7 +448,7 @@ namespace wearable
 			case ManagerState::kNone:
 				vrinput::StartBlockingAll();
 				vrinput::StartSmoothing();
-				RegisterconfigModeButtons(true);
+				RegisterConfigModeButtons(true);
 				if (g_vrikInterface) { g_vrikInterface->beginGestureProfile(); }
 				if (g_higgsInterface)
 				{
@@ -500,7 +516,7 @@ namespace wearable
 				vrinput::StopBlockingAll();
 				vrinput::StopSmoothing();
 				ApplySelectionShader();
-				RegisterconfigModeButtons(false);
+				RegisterConfigModeButtons(false);
 				if (g_vrikInterface) { g_vrikInterface->endGestureProfile(); }
 				if (g_higgsInterface)
 				{
@@ -599,7 +615,7 @@ namespace wearable
 		}
 	}
 
-	void WearableManager::RegisterconfigModeButtons(bool a_unregister_register)
+	void WearableManager::RegisterConfigModeButtons(bool a_unregister_register)
 	{
 		if (a_unregister_register)
 		{
@@ -610,6 +626,10 @@ namespace wearable
 			vrinput::AddCallback(
 				settings.color, ColorControl, configmode_active_hand, vrinput::ActionType::kPress);
 			vrinput::AddCallback(settings.cycle_AV, CycleAVControl, configmode_active_hand,
+				vrinput::ActionType::kPress);
+			vrinput::AddCallback(vr::k_EButton_DPad_Left, LeftStick, configmode_active_hand,
+				vrinput::ActionType::kPress);
+			vrinput::AddCallback(vr::k_EButton_DPad_Right, RightStick, configmode_active_hand,
 				vrinput::ActionType::kPress);
 
 			for (auto button : settings.exit)
@@ -627,6 +647,10 @@ namespace wearable
 			vrinput::RemoveCallback(
 				settings.color, ColorControl, configmode_active_hand, vrinput::ActionType::kPress);
 			vrinput::RemoveCallback(settings.cycle_AV, CycleAVControl, configmode_active_hand,
+				vrinput::ActionType::kPress);
+			vrinput::RemoveCallback(vr::k_EButton_DPad_Left, LeftStick, configmode_active_hand,
+				vrinput::ActionType::kPress);
+			vrinput::RemoveCallback(vr::k_EButton_DPad_Right, RightStick, configmode_active_hand,
 				vrinput::ActionType::kPress);
 
 			for (auto button : settings.exit)
@@ -653,12 +677,39 @@ namespace wearable
 		}
 	}
 
+	void WearableManager::CycleSelection(bool increment)
+	{
+		switch (configmode_state)
+		{
+		case ManagerState::kIdle:
+			{
+				if (auto sp = configmode_selected_item.lock()) {
+                    sp->CycleSubitems();
+                }
+			}
+			break;
+		case ManagerState::kCycleAV:
+			{
+			}
+			break;
+		case ManagerState::kTranslate:
+			{
+                if  (!configmode_skeletons.empty()){
+                    
+                }
+			}
+			break;
+		default:
+			break;
+		}
+	}
+
 	void WearableManager::ShowEligibleSkeleton(WearablePtr a_selected)
 	{
 		auto        player = PlayerCharacter::GetSingleton();
 		NiTransform t;
 
-		for (auto& nodename : a_selected->eligible_nodes)
+		for (auto& nodename : a_selected->eligible_attach_nodes)
 		{
 			if (auto skeleton = player->Get3D(false)->GetObjectByName(nodename))
 			{
@@ -708,6 +759,10 @@ namespace wearable
 
 	void Meter::Update() {}
 
+	void Meter::CycleSubitems() {}
+
 	void CompoundMeter::Update() {}
+
+	void CompoundMeter::CycleSubitems() {}
 
 }  // namespace wearable

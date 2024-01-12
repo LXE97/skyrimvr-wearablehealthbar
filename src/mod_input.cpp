@@ -6,17 +6,6 @@ namespace vrinput
 {
 	using namespace vr;
 
-	bool  block_all_inputs = false;
-	int   smoothing_window = 0;
-	float adjustable = 0.02f;
-
-	std::mutex               callback_lock;
-	vr::TrackedDeviceIndex_t g_leftcontroller;
-	vr::TrackedDeviceIndex_t g_rightcontroller;
-
-	std::deque<vr::TrackedDevicePose_t> pose_buffer[2];
-	vr::TrackedDevicePose_t             simple_buffer[2] = {};
-
 	struct InputCallback
 	{
 		Hand              device;
@@ -29,27 +18,22 @@ namespace vrinput
 		}
 	};
 
-	TrackedDevicePose_t operator+(const TrackedDevicePose_t& lhs, const TrackedDevicePose_t& rhs)
-	{
-		TrackedDevicePose_t result;
-		for (int i = 0; i < 3; ++i)
-		{
-			for (int j = 0; j < 4; ++j)
-			{
-				result.mDeviceToAbsoluteTracking.m[i][j] = lhs.mDeviceToAbsoluteTracking.m[i][j];
-			}
-			result.mDeviceToAbsoluteTracking.m[i][3] =
-				lhs.mDeviceToAbsoluteTracking.m[i][3] + rhs.mDeviceToAbsoluteTracking.m[i][3];
-		}
+	bool  block_all_inputs = false;
+	bool  smoothing = 0;
+	float joystick_dpad_threshold = 0.7f;
+	float joystick_dpad_threshold_negative = -0.7f;
+	float adjustable = 0.02f;
 
-		return result;
-	}
+	std::mutex               callback_lock;
+	vr::TrackedDeviceIndex_t g_leftcontroller;
+	vr::TrackedDeviceIndex_t g_rightcontroller;
 
-	vr::TrackedDevicePose_t& operator/=(vr::TrackedDevicePose_t& lhs, float divisor)
-	{
-		for (int i = 0; i < 3; ++i) { lhs.mDeviceToAbsoluteTracking.m[i][3] /= divisor; }
-		return lhs;
-	}
+	vr::VRControllerAxis_t joystick[2] = {};
+	float                  trigger[2];
+
+	// each button id is mapped to a list of callback funcs
+	std::unordered_map<int, std::vector<InputCallback>> callbacks;
+	std::unordered_map<vr::EVRButtonId, bool>           buttonStates;
 
 	RE::NiTransform HmdMatrixToNiTransform(const HmdMatrix34_t& hmdMatrix)
 	{
@@ -87,16 +71,12 @@ namespace vrinput
 		return hmdMatrix;
 	}
 
-	// each button id is mapped to a list of callback funcs
-	std::unordered_map<vr::EVRButtonId, std::vector<InputCallback>> callbacks;
-	std::unordered_map<vr::EVRButtonId, bool>                       buttonStates;
-
 	void StartBlockingAll() { block_all_inputs = true; }
 	void StopBlockingAll() { block_all_inputs = false; }
 	bool isBlockingAll() { return block_all_inputs; }
 
-	void StartSmoothing() { smoothing_window = 1; }
-	void StopSmoothing() { smoothing_window = 0; }
+	void StartSmoothing() { smoothing = 1; }
+	void StopSmoothing() { smoothing = 0; }
 
 	void AddCallback(const vr::EVRButtonId a_button, const InputCallbackFunc a_callback,
 		const Hand hand, const ActionType touch_or_press)
@@ -118,7 +98,7 @@ namespace vrinput
 		if (it != callbacks[a_button].end()) { callbacks[a_button].erase(it); }
 	}
 
-	void processButtonChanges(uint64_t changedMask, uint64_t currentState, bool isLeft, bool touch,
+	void ProcessButtonChanges(uint64_t changedMask, uint64_t currentState, bool isLeft, bool touch,
 		vr::VRControllerState_t* out)
 	{
 		// iterate through each of the button codes that we care about
@@ -131,6 +111,7 @@ namespace vrinput
 			{
 				// check whether it was a press or release event
 				bool buttonPress = bitmask & currentState;
+				SKSE::log::trace("{} {}", buttonID, buttonPress ? "down" : "up");
 
 				const ModInputEvent event_flags = ModInputEvent(static_cast<Hand>(isLeft),
 					static_cast<ActionType>(touch), static_cast<ButtonState>(buttonPress));
@@ -160,8 +141,49 @@ namespace vrinput
 		}
 	}
 
+	/* range: -1.0 to 1.0 for joystick, 0.0 to 1.0 for trigger ( 0 = not touching) */
+	inline void ProcessAxisChanges(
+		const VRControllerAxis_t& a_joystick, const float& a_trigger, bool isLeft)
+	{
+		static std::vector<bool> dpad_buffer[2] = { { false, false, false, false },
+			{ false, false, false, false } };
+
+		std::vector<bool> dpad_temp = {
+			(a_joystick.x < joystick_dpad_threshold_negative),
+			(a_joystick.y > joystick_dpad_threshold),
+			(a_joystick.x > joystick_dpad_threshold),
+			(a_joystick.y < joystick_dpad_threshold_negative),
+		};
+
+		if (dpad_buffer[isLeft] != dpad_temp)
+		{
+			for (int id = 0; id < dpad.size(); id++)
+			{
+				if (dpad_buffer[isLeft][id] != dpad_temp[id])
+				{
+					const ModInputEvent event_flags = ModInputEvent(static_cast<Hand>(isLeft),
+						ActionType::kPress, static_cast<ButtonState>((bool)dpad_temp[id]));
+
+					// iterate through callbacks for this button and call if flags match
+					for (auto& cb : callbacks[id + (int)vr::k_EButton_DPad_Left])
+					{
+						if (cb.device == event_flags.device &&
+							cb.type == event_flags.touch_or_press)
+						{
+							cb.func(event_flags);
+						}
+					}
+				}
+			}
+			dpad_buffer[isLeft] = dpad_temp;
+		}
+
+		trigger[isLeft] = a_trigger;
+		joystick[isLeft] = a_joystick;
+	}
+
 	// handles low level button/trigger events
-	bool ControllerInput_CB(vr::TrackedDeviceIndex_t unControllerDeviceIndex,
+	bool ControllerInputCallback(vr::TrackedDeviceIndex_t unControllerDeviceIndex,
 		const vr::VRControllerState_t* pControllerState, uint32_t unControllerStateSize,
 		vr::VRControllerState_t* pOutputControllerState)
 	{
@@ -181,10 +203,13 @@ namespace vrinput
 				uint64_t pressed_change = prev_pressed[isLeft] ^ pControllerState->ulButtonPressed;
 				uint64_t touched_change = prev_touched[isLeft] ^ pControllerState->ulButtonTouched;
 
+				ProcessAxisChanges(
+					pControllerState->rAxis[0], pControllerState->rAxis[1].x, isLeft);
+
 				if (pressed_change)
 				{
-					vrinput::processButtonChanges(pressed_change, pControllerState->ulButtonPressed,
-						isLeft, false, pOutputControllerState);
+					ProcessButtonChanges(pressed_change, pControllerState->ulButtonPressed, isLeft,
+						false, pOutputControllerState);
 					prev_pressed[isLeft] = pControllerState->ulButtonPressed;
 					prev_Pressed_out[isLeft] = pOutputControllerState->ulButtonPressed;
 				}
@@ -192,14 +217,14 @@ namespace vrinput
 
 				if (touched_change)
 				{
-					vrinput::processButtonChanges(touched_change, pControllerState->ulButtonTouched,
-						isLeft, true, pOutputControllerState);
+					ProcessButtonChanges(touched_change, pControllerState->ulButtonTouched, isLeft,
+						true, pOutputControllerState);
 					prev_touched[isLeft] = pControllerState->ulButtonTouched;
 					prev_touched_out[isLeft] = pOutputControllerState->ulButtonTouched;
 				}
 				else { pOutputControllerState->ulButtonTouched = prev_touched_out[isLeft]; }
 
-				if (vrinput::isBlockingAll())
+				if (isBlockingAll())
 				{
 					pOutputControllerState->ulButtonPressed = 0;
 					pOutputControllerState->ulButtonTouched = 0;
@@ -212,19 +237,22 @@ namespace vrinput
 	}
 
 	// handles device poses
-	vr::EVRCompositorError cbFuncGetPoses(VR_ARRAY_COUNT(unRenderPoseArrayCount)
-											  vr::TrackedDevicePose_t* pRenderPoseArray,
-		uint32_t                                                       unRenderPoseArrayCount,
-		VR_ARRAY_COUNT(unGamePoseArrayCount) vr::TrackedDevicePose_t*  pGamePoseArray,
-		uint32_t                                                       unGamePoseArrayCount)
+	vr::EVRCompositorError ControllerPoseCallback(VR_ARRAY_COUNT(unRenderPoseArrayCount)
+													  vr::TrackedDevicePose_t* pRenderPoseArray,
+		uint32_t                                                      unRenderPoseArrayCount,
+		VR_ARRAY_COUNT(unGamePoseArrayCount) vr::TrackedDevicePose_t* pGamePoseArray,
+		uint32_t                                                      unGamePoseArrayCount)
 	{
+		static vr::TrackedDevicePose_t simple_buffer[2] = {};
+
 		for (auto isLeft : { true, false })
 		{
-			auto dev = isLeft ? g_leftcontroller : g_rightcontroller;
-			if (smoothing_window)
+			auto device = isLeft ? g_leftcontroller : g_rightcontroller;
+
+			if (smoothing)
 			{
 				auto pre = HmdMatrixToNiTransform(simple_buffer[isLeft].mDeviceToAbsoluteTracking);
-				auto cur = HmdMatrixToNiTransform(pGamePoseArray[dev].mDeviceToAbsoluteTracking);
+				auto cur = HmdMatrixToNiTransform(pGamePoseArray[device].mDeviceToAbsoluteTracking);
 
 				// TODO: real filtering algorithm
 				// simple noise gate
@@ -250,15 +278,13 @@ namespace vrinput
 					pre.translate = helper::LinearInterp(pre.translate, cur.translate, low_rate);
 				}
 
-				//pre = HmdMatrixToNiTransform(simple_buffer[isLeft].mDeviceToAbsoluteTracking);
-
 				// adaptive slerp?
 				pre.rotate = helper::slerpMatrixAdaptive(pre.rotate, cur.rotate);
 
-				pGamePoseArray[dev].mDeviceToAbsoluteTracking = NiTransformToHmdMatrix(pre);
-				simple_buffer[isLeft] = pGamePoseArray[dev];
+				pGamePoseArray[device].mDeviceToAbsoluteTracking = NiTransformToHmdMatrix(pre);
+				simple_buffer[isLeft] = pGamePoseArray[device];
 			}
-			else { simple_buffer[isLeft] = pGamePoseArray[dev]; }
+			else { simple_buffer[isLeft] = pGamePoseArray[device]; }
 		}
 		return vr::EVRCompositorError::VRCompositorError_None;
 	}
