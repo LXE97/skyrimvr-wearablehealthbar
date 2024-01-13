@@ -36,11 +36,38 @@ namespace wearable_plugin
 	vr::EVRButtonId    g_config_PrimaryBtn = vr::k_EButton_Grip;
 	std::vector<float> times;
 
+	std::vector<std::unique_ptr<NifChar>> characters;
+
+	bool ass = true;
+
+	void makeit()
+
+	{
+		NiTransform t;
+		auto        shit =
+			PlayerCharacter::GetSingleton()->Get3D(false)->GetObjectByName("NPC L Hand [LHnd]");
+		int c = 0;
+		while (ass)
+		{
+			c++;
+			if (c > 200)
+			{
+				c = 0;
+				characters.clear();
+				SKSE::log::error("200 reacehd");
+			}
+			else { characters.push_back(std::make_unique<NifChar>('l', shit, t)); }
+			std::this_thread::sleep_for(std::chrono::milliseconds(20));
+		}
+	}
+
 	void OnOverlap(const OverlapEvent& e) {}
 
-	std::shared_ptr<Wearable> w;
-ArtAddonPtr x;
-	bool OnDEBUGBtnPressA(const ModInputEvent& e)
+	std::shared_ptr<Wearable>             w;
+	NifTextBox*                           x;
+	NifChar*                              p;
+	std::vector<std::unique_ptr<NifChar>> v;
+	bool                                  OnDEBUGBtnPressA(const ModInputEvent& e)
 	{
 		if (e.button_state == ButtonState::kButtonDown)
 		{
@@ -48,11 +75,12 @@ ArtAddonPtr x;
 
 			if (!menuchecker::isGameStopped())
 			{
-				NiTransform l;
-				l.translate.z = 10;
-				x = NifChar::Make('a', vrinput::GetHandNode(Hand::kRight, false), l);
+				//x = new NifTextBox("MAGICKA", 0.1f, vrinput::GetHandNode(Hand::kRight, false), l);
+
+				std::thread p1(makeit);
+				p1.detach();
+
 				vrinput::adjustable += 0.002;
-				SKSE::log::trace("{}", vrinput::adjustable);
 			}
 		}
 		return false;
@@ -67,9 +95,7 @@ ArtAddonPtr x;
 			if (!menuchecker::isGameStopped())
 			{
 				vrinput::adjustable -= 0.002;
-
-				SKSE::log::trace("{}", vrinput::adjustable);
-
+				ass = false;
 				static bool toggle = false;
 				toggle ^= 1;
 				if (toggle)
@@ -134,7 +160,11 @@ ArtAddonPtr x;
 		WearableManager::GetSingleton()->Register(w);
 	}
 
-	void PreGameLoad() { WearableManager::GetSingleton()->TransitionState(ManagerState::kNone); }
+	void PreGameLoad()
+	{
+		WearableManager::GetSingleton()->TransitionState(ManagerState::kNone);
+		delete x;
+	}
 
 	void StartMod()
 	{
@@ -156,7 +186,7 @@ ArtAddonPtr x;
 
 		// register event sinks and handlers
 		vrinput::AddCallback(vr::k_EButton_A, OnDEBUGBtnPressA, Hand::kRight, ActionType::kPress);
-		
+
 		vrinput::AddCallback(
 			vr::k_EButton_ApplicationMenu, OnDEBUGBtnPressB, Hand::kRight, ActionType::kPress);
 	}

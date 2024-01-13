@@ -6,6 +6,7 @@
 #pragma once
 
 #include <chrono>
+#include <functional>
 #include <memory>
 
 namespace art_addon
@@ -15,6 +16,7 @@ namespace art_addon
 	class ArtAddon
 	{
 		friend class ArtAddonManager;
+		//friend class NifChar;
 
 	public:
 		/** Returns: shared_ptr, nullptr if modelPath or target is invalid
@@ -28,8 +30,10 @@ namespace art_addon
          * a_attach_node:	parent node for the new 3D, must be a 3rd person node for the player
          * a_local:      	transform relative to the attachNode
 		 */
-		static ArtAddonPtr Make(const char* a_model_path, RE::TESObjectREFR* a_target,
-			RE::NiAVObject* a_attach_node, RE::NiTransform& a_local);
+		[[nodiscard]] static ArtAddonPtr Make(
+			const char* a_model_path, RE::TESObjectREFR* a_target, RE::NiAVObject* a_attach_node,
+			RE::NiTransform& a_local, std::function<void()> a_callback = [](){},
+			bool a_unique = false);
 
 		~ArtAddon()
 		{
@@ -37,8 +41,8 @@ namespace art_addon
 		}
 
 		/** Returns: Pointer to the attached NiAVObject. nullptr if initialization hasn't finished. */
-		RE::NiAVObject* const Get3D() { return root3D; }
-		RE::NiAVObject* const GetParent() { return attach_node; }
+		RE::NiAVObject* Get3D() { return root3D; }
+		RE::NiAVObject* GetParent() { return attach_node; }
 
 	protected:
 		ArtAddon() = default;
@@ -47,19 +51,17 @@ namespace art_addon
 		ArtAddon& operator=(const ArtAddon&) = delete;
 		ArtAddon& operator=(ArtAddon&&) = delete;
 
-		virtual inline void OnModelCreation() {}
-
-		RE::NiAVObject*    root3D = nullptr;
-		RE::TESObjectREFR* target = nullptr;
-		RE::BGSArtObject*  art_object = nullptr;
-		RE::NiAVObject*    attach_node = nullptr;
-		RE::NiTransform    local;
+		RE::NiAVObject*       root3D = nullptr;
+		RE::TESObjectREFR*    target = nullptr;
+		RE::BGSArtObject*     art_object = nullptr;
+		RE::NiAVObject*       attach_node = nullptr;
+		RE::NiTransform       local;
+		std::function<void()> callback;
 	};
 
 	class ArtAddonManager
 	{
 		friend ArtAddon;
-		friend class NifChar;
 
 	public:
 		/** Must be called every frame. It only takes 1 frame to create all the models and remove 
@@ -80,7 +82,7 @@ namespace art_addon
 		ArtAddonManager& operator=(const ArtAddonManager&) = delete;
 		ArtAddonManager& operator=(ArtAddonManager&&) = delete;
 
-		RE::BGSArtObject* GetArtForm(const char* a_modelPath);
+		RE::BGSArtObject* GetArtForm(const char* a_modelPath, bool a_make_unique);
 		int               GetNextId();
 
 		std::unordered_map<int, std::weak_ptr<ArtAddon>>   new_objects;
@@ -90,47 +92,45 @@ namespace art_addon
 		int                                                next_id = -2;
 	};
 
-	class NifChar : public ArtAddon
+	class NifChar
 	{
-		friend class ArtAddonManager;
-
 	public:
-		static ArtAddonPtr Make(char a_ascii, RE::NiAVObject* a_parent, RE::NiTransform& a_local);
-
-	private:
 		static constexpr float       kUVOffset_x = 0.0625f;
 		static constexpr float       kUVOffset_y = 0.125f;
+		static constexpr float       kCharacterWidth = 0.5f;
 		static constexpr const char* kFontModelPath = "ArtAddon/char.nif";
 
-		void                OnModelCreation() override;
+		NifChar(char a_ascii, RE::NiAVObject* a_parent, RE::NiTransform& a_local);
+		~NifChar(){}
+
+	private:
+		void OnModelCreation();
+
 		inline RE::NiPoint2 AsciiToXY(char a_ascii)
 		{
 			char temp = a_ascii - ' ';
+
 			return RE::NiPoint2((temp % 16) * kUVOffset_x, (temp / 16) * kUVOffset_y);
 		}
 
-		char ascii;
+		ArtAddonPtr artaddon;
+		char        ascii;
 	};
 
 	class NifTextBox
 	{
 	public:
 		NifTextBox(const char* a_string, const float a_spacing, RE::NiAVObject* a_attach_to,
-			RE::NiTransform& a_local) :
-			string(a_string),
-			spacing(a_spacing)
-		{}
+			RE::NiTransform& a_local);
 		~NifTextBox() { characters.clear(); }
 
 	private:
-		static constexpr const char* kEmpty = "meshes/effects/fxemptyobject.nif";
-
 		void MakeString();
 
-		ArtAddonPtr              root;
-		std::vector<ArtAddonPtr> characters;
-		const char*              string;
-		const float              spacing;
+		ArtAddonPtr                           root;
+		std::vector<std::unique_ptr<NifChar>> characters;
+		const char*                           string;
+		const float                           spacing;
 	};
 
 }

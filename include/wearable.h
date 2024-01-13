@@ -134,12 +134,11 @@ namespace wearable
 			active_hand(a_active_hand),
 			overlap_offset(a_overlap_offset),
 			eligible_attach_nodes(*a_eligible_nodes)
-
 		{}
 
 	protected:
 		virtual void Update() = 0;
-		virtual void CycleSubitems(){}
+		virtual void CycleSubitems() {}
 
 		art_addon::ArtAddonPtr    model = nullptr;
 		vrinput::OverlapSpherePtr interactable = nullptr;
@@ -188,7 +187,6 @@ namespace wearable
 		std::vector<MeterType>                     eligible_types;
 		std::vector<std::string>                   meternode_names;
 		std::unordered_map<MeterType, RE::NiColor> color_changes;
-		
 
 	private:
 		void Update() override;
@@ -203,7 +201,7 @@ namespace wearable
 	public:
 	private:
 		void Update() override;
-		 void CycleSubitems() override;
+		void CycleSubitems() override;
 
 		std::vector<WearablePtr> meters;
 	};
