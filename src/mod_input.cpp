@@ -111,7 +111,6 @@ namespace vrinput
 			{
 				// check whether it was a press or release event
 				bool buttonPress = bitmask & currentState;
-				SKSE::log::trace("{} {}", buttonID, buttonPress ? "down" : "up");
 
 				const ModInputEvent event_flags = ModInputEvent(static_cast<Hand>(isLeft),
 					static_cast<ActionType>(touch), static_cast<ButtonState>(buttonPress));

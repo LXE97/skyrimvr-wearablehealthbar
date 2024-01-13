@@ -22,7 +22,26 @@ namespace helper
 	void SetTintColor();
 	void SetUVCoords(RE::NiAVObject* a_target, float a_x, float a_y);
 
+	inline RE::BSShaderProperty* GetShaderProperty(RE::NiAVObject* a_target, const char* a_node)
+	{
+		if (a_target)
+		{
+			if (auto geo_node = a_target->GetObjectByName(a_node))
+			{
+				if (auto geometry = geo_node->AsGeometry())
+				{
+					if (auto property = geometry->properties[RE::BSGeometry::States::kEffect].get())
+					{
+						if (auto shader = netimmerse_cast<RE::BSShaderProperty*>(property)) {
+							return shader;
+						}
+					}
+				}
+			}
+		}
+		return nullptr;
+	}
+
 	void PrintPlayerModelEffects();
 	void PrintPlayerShaderEffects();
-
 }

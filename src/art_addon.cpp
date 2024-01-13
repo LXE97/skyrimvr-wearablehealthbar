@@ -7,13 +7,13 @@ namespace art_addon
 	using namespace RE;
 
 	std::shared_ptr<ArtAddon> ArtAddon::Make(const char* a_model_path, TESObjectREFR* a_target,
-		NiAVObject* a_attach_node, NiTransform& a_local)
+		NiAVObject* a_attach_node, NiTransform& a_local, std::function<void()> a_callback,
+		bool a_unique)
 	{
 		auto manager = ArtAddonManager::GetSingleton();
-		auto art_object = manager->GetArtForm(a_model_path);
+		auto art_object = manager->GetArtForm(a_model_path, a_unique);
 		int  id = manager->GetNextId();
-
-		std::scoped_lock lock(manager->objects_lock);
+		//std::scoped_lock lock(manager->objects_lock);
 
 		/** Using the duration parameter of the BSTempEffect as an ID because anything < 0 has the
 		 * same effect. If another mod happens to use this library there will be ID collisions but
@@ -26,7 +26,7 @@ namespace art_addon
 			new_obj->local = a_local;
 			new_obj->attach_node = a_attach_node;
 			new_obj->target = a_target;
-
+			new_obj->callback = a_callback;
 			manager->new_objects.emplace(id, new_obj);
 			return new_obj;
 		}
@@ -63,7 +63,7 @@ namespace art_addon
 									addon->attach_node->AsNode()->AttachChild(addon->root3D);
 									a_modelEffect.lifetime = 0;
 									addon->root3D->local = std::move(addon->local);
-									addon->OnModelCreation();
+									addon->callback();
 								}
 							}
 							else
@@ -88,23 +88,23 @@ namespace art_addon
 		}
 	}
 
-	BGSArtObject* ArtAddonManager::GetArtForm(const char* modelPath)
+	BGSArtObject* ArtAddonManager::GetArtForm(const char* a_modelPath, bool a_make_unique)
 	{
-		if (!artobject_cache.contains(modelPath))
+		if (a_make_unique || !artobject_cache.contains(a_modelPath))
 		{
 			if (base_artobject)
 			{
 				if (auto dupe = base_artobject->CreateDuplicateForm(false, nullptr))
 				{
 					auto temp = dupe->As<BGSArtObject>();
-					temp->SetModel(modelPath);
-					artobject_cache[modelPath] = temp;
+					temp->SetModel(a_modelPath);
+					artobject_cache[a_modelPath] = temp;
 					return temp;
 				}
 			}
 			else { return nullptr; }
 		}
-		return artobject_cache[modelPath];
+		return artobject_cache[a_modelPath];
 	}
 
 	int ArtAddonManager::GetNextId() { return next_id--; }
@@ -116,59 +116,55 @@ namespace art_addon
 		base_artobject = TESForm::LookupByID(kBaseArtobjectId)->As<BGSArtObject>();
 	}
 
-	ArtAddonPtr NifChar::Make(char a_ascii, NiAVObject* a_parent, NiTransform& a_local)
+	NifChar::NifChar(char a_ascii, RE::NiAVObject* a_parent, RE::NiTransform& a_local) :
+		ascii(a_ascii)
 	{
-		auto           manager = ArtAddonManager::GetSingleton();
-		auto           art_object = manager->GetArtForm(kFontModelPath);
-		int            id = manager->GetNextId();
-		TESObjectREFR* a_target = PlayerCharacter::GetSingleton()->AsReference();
-
-		std::scoped_lock lock(manager->objects_lock);
-
-		/** Using the duration parameter of the BSTempEffect as an ID because anything < 0 has the
-		 * same effect. If another mod happens to use this library there will be ID collisions but
-		 * they are still distinguished by the unique BGSArtObject property. */
-		if (art_object && a_parent && a_target && a_target->IsHandleValid() &&
-			a_target->ApplyArtObject(art_object, (float)id))
-		{
-			auto new_obj = std::shared_ptr<NifChar>(new NifChar);
-			new_obj->art_object = art_object;
-			new_obj->local = a_local;
-			new_obj->attach_node = a_parent;
-			new_obj->target = a_target;
-			new_obj->ascii = a_ascii;
-
-			manager->new_objects.emplace(id, new_obj);
-			return new_obj;
-		}
-		else
-		{
-			SKSE::log::error("Art addon failed: invalid target or model path");
-			return nullptr;
-		}
+		artaddon = ArtAddon::Make(kFontModelPath, PlayerCharacter::GetSingleton()->AsReference(),
+			a_parent, a_local, std::bind(&NifChar::OnModelCreation, this));
 	}
 
 	void NifChar::OnModelCreation()
 	{
-		if (auto geo_node = root3D->GetObjectByName("char"))
+		if (auto shader = helper::GetShaderProperty(artaddon->Get3D(), "char"))
 		{
-			if (auto geometry = geo_node->AsGeometry())
+			auto oldmat = shader->material;
+			auto newmat = oldmat->Create();
+			newmat->CopyMembers(oldmat);
+			shader->material = newmat;
+			newmat->IncRef();
+			oldmat->DecRef();
+			// TODO: see if this new material decref in dtor
+
+			auto temp = AsciiToXY(ascii);
+
+			newmat->texCoordOffset[0].x = temp.x;
+			newmat->texCoordOffset[0].y = temp.y;
+			newmat->texCoordOffset[1].x = temp.x;
+			newmat->texCoordOffset[1].y = temp.y;
+		}
+	}
+
+	NifTextBox::NifTextBox(const char* a_string, const float a_spacing, RE::NiAVObject* a_attach_to,
+		RE::NiTransform& a_local) :
+		string(a_string),
+		spacing(a_spacing)
+	{
+		root =
+			ArtAddon::Make(NifChar::kFontModelPath, PlayerCharacter::GetSingleton()->AsReference(),
+				a_attach_to, a_local, std::bind(&NifTextBox::MakeString, this), true);
+	}
+
+	void NifTextBox::MakeString()
+	{
+		if (auto root_node = root->Get3D())
+		{
+			NiTransform t;
+			for (int i = 0; string[i] != '\0'; i++)
 			{
-				if (auto property = geometry->properties[BSGeometry::States::kEffect].get())
-				{
-					if (auto shader = netimmerse_cast<RE::BSShaderProperty*>(property))
-					{
-						if (auto material = shader->material)
-						{
-							auto temp = AsciiToXY(ascii);
-							material->texCoordOffset[0].x = temp.x;
-							material->texCoordOffset[0].y = temp.y;
-							material->texCoordOffset[1].x =  temp.x;
-							material->texCoordOffset[1].y = temp.y;
-						}
-					}
-				}
+				characters.push_back(std::make_unique<NifChar>(string[i], root_node, t));
+				t.translate.y += NifChar::kCharacterWidth + spacing;
 			}
+			root_node->local.rotate;
 		}
 	}
 }
