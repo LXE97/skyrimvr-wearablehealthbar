@@ -1,9 +1,71 @@
 #pragma once
 #include <algorithm>
+#include <numbers>
 
 namespace helper
 {
 	using namespace RE;
+
+	inline RE::NiColor HSV_to_RGB(float h, float s, float v)
+	{
+		h = std::fmod(h, 1.0f);
+		s = std::clamp(s, 0.0f, 1.0f);
+		v = std::clamp(v, 0.0f, 1.0f);
+
+		int   hi = static_cast<int>(std::floor(h * 6.0)) % 6;
+		float f = h * 6.0 - std::floor(h * 6.0);
+		float p = v * (1.0 - s);
+		float q = v * (1.0 - f * s);
+		float t = v * (1.0 - (1.0 - f) * s);
+
+		switch (hi)
+		{
+		case 0:
+			return { v, t, p };
+		case 1:
+			return { q, v, p };
+		case 2:
+			return { p, v, t };
+		case 3:
+			return { p, q, v };
+		case 4:
+			return { t, p, v };
+		default:
+			return { v, p, q };
+		}
+	}
+
+	inline RE::NiPoint3 RGBtoHSV(NiColor rgb)
+	{
+		float r = rgb.red;
+		float g = rgb.green;
+		float b = rgb.blue;
+		float cmax = std::max({ r, g, b });
+		float cmin = std::min({ r, g, b });
+		float delta = cmax - cmin;
+
+		// Calculate hue
+		float h = 0.0;
+		if (delta != 0.0)
+		{
+			if (cmax == r) { h = std::fmod((g - b) / delta, 6.0); }
+			else if (cmax == g) { h = (b - r) / delta + 2.0; }
+			else
+			{  // cmax == b
+				h = (r - g) / delta + 4.0;
+			}
+			h /= 6.0;
+			if (h < 0.0) { h += 1.0; }
+		}
+
+		// Calculate saturation
+		float s = (cmax != 0.0) ? delta / cmax : 0.0;
+
+		// Calculate value
+		float v = cmax;
+
+		return { h, s, v };
+	}
 
 	constexpr inline float deg2radC(const float d) { return d * 0.01745329f; }
 
@@ -72,19 +134,17 @@ namespace helper
 		return result;
 	}
 
-	
-
 	inline NiMatrix3 RotateBetweenVectors(const NiPoint3& src, const NiPoint3& dest)
 	{
 		RE::NiPoint3 axis = src.UnitCross(dest);
-		SKSE::log::trace("src {} {} {} dest {} {} {} axis {} {} {} length {}", src.x, src.y, src.z, dest.x,
-			dest.y, dest.z, axis.x, axis.y, axis.z, axis.Length());
+		SKSE::log::trace("src {} {} {} dest {} {} {} axis {} {} {} length {}", src.x, src.y, src.z,
+			dest.x, dest.y, dest.z, axis.x, axis.y, axis.z, axis.Length());
 		auto angle = std::acos(helper::DotProductSafe(src, dest));
 		if (axis.Length() < 0.9995f)
 		{  // Handle the case where the vectors are collinear
 			axis = src.UnitCross(RE::NiPoint3(std::rand() / RAND_MAX, std::rand() / RAND_MAX, 0));
-		} // also need to handle case where the angle is extremely small?
-			
+		}  // also need to handle case where the angle is extremely small?
+
 		return helper::getRotationAxisAngle(axis, angle);
 	}
 

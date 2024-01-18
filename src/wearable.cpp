@@ -124,13 +124,32 @@ namespace wearable
 		return false;
 	}
 
-	bool WearableManager::CycleAVControl(const vrinput::ModInputEvent& e) { return false; }
+	bool WearableManager::CycleFunctionControl(const vrinput::ModInputEvent& e)
+	{
+		auto mgr = WearableManager::GetSingleton();
+
+		if (e.button_state == vrinput::ButtonState::kButtonDown)
+		{
+			if (mgr->GetState() == ManagerState::kIdle)
+			{
+				mgr->SetState(ManagerState::kCycleFunctions);
+			}
+		}
+		else
+		{
+			if (mgr->GetState() == ManagerState::kCycleFunctions)
+			{
+				mgr->SetState(ManagerState::kIdle);
+			}
+		}
+		return false;
+	}
 
 	bool WearableManager::LeftStick(const vrinput::ModInputEvent& e)
 	{
 		auto mgr = WearableManager::GetSingleton();
 
-		if (e.button_state == vrinput::ButtonState::kButtonDown) { mgr->CycleSelection(false); }
+		if (e.button_state == vrinput::ButtonState::kButtonDown) { mgr->CycleSelection(true); }
 		return false;
 	}
 
@@ -138,8 +157,60 @@ namespace wearable
 	{
 		auto mgr = WearableManager::GetSingleton();
 
-		if (e.button_state == vrinput::ButtonState::kButtonDown) { mgr->CycleSelection(true); }
+		if (e.button_state == vrinput::ButtonState::kButtonDown) { mgr->CycleSelection(false); }
 		return false;
+	}
+
+	void WearableManager::CycleSelection(bool increment)
+	{
+		switch (configmode_state)
+		{
+		case ManagerState::kIdle:
+			{
+				if (auto sp = configmode_selected_item.lock())
+				{
+					sp->CycleSubitems(increment);
+					//TODO: apply / clear shaders
+				}
+			}
+			break;
+		case ManagerState::kCycleFunctions:
+			{
+				if (auto sp = configmode_selected_item.lock())
+				{
+					sp->CycleFunction(increment);
+
+					NiTransform t;
+					t.translate = { 0, 0, 5 };
+					sp->configmode_function_text =
+						std::make_unique<AddonTextBox>(sp->GetFunctionName(), 0.f, sp->Get3D(), t);
+				}
+			}
+			break;
+		case ManagerState::kTranslate:
+			{
+				if (auto sp = configmode_selected_item.lock())
+				{
+					if (auto len = configmode_visible_bones.size(); len > 0)
+					{
+						// reset appearance of current parent
+						helper::SetGlowColor(
+							configmode_visible_bones.at(configmode_parentbone_index % len)->Get3D(),
+							&bone_off);
+
+						configmode_parentbone_index += increment ? 1 : -1;
+
+						// set apperance of new parent
+						helper::SetGlowColor(
+							configmode_visible_bones.at(configmode_parentbone_index % len)->Get3D(),
+							&bone_on);
+					}
+				}
+			}
+			break;
+		default:
+			break;
+		}
 	}
 
 	void WearableManager::OverlapHandler(const vrinput::OverlapEvent& e)
@@ -169,7 +240,7 @@ namespace wearable
 	void WearableManager::Update()
 	{
 		// 1. State transitions
-		if (configmode_next_state != configmode_state) { TransitionState(configmode_next_state); }
+		if (configmode_next_state != configmode_state) { StateTransition(configmode_next_state); }
 
 		if (!managed_objects.empty())
 		{
@@ -179,7 +250,7 @@ namespace wearable
 			{
 				if (auto sp = configmode_selected_item.lock())
 				{
-					if (auto node = sp->model->Get3D())
+					if (auto node = sp->Get3D())
 					{
 						NiUpdateData ctx;
 
@@ -198,8 +269,7 @@ namespace wearable
 							{
 								if (hand_delta > settings.reset_distance)
 								{
-									node->local.rotate = sp->default_local.rotate;
-									node->local.translate = sp->default_local.translate;
+									node->local = configmode_wearable_initial_local;
 								}
 								else
 								{
@@ -221,35 +291,8 @@ namespace wearable
 									// position: vector from parent to new child world position, rotated by the inverse of the parent's rotation
 									node->local.translate = parent_world.rotate.Transpose() *
 										(new_world.translate - parent_world.translate);
-
-									// skeleton visuals
-									if (!configmode_skeletons.empty())
-									{
-										static std::weak_ptr<ArtAddon> closest;
-
-										if (auto cur_closest = FindClosestSkeleton(node).lock())
-										{
-											auto prev_closest = closest.lock();
-
-											if (prev_closest != cur_closest)
-											{
-												if (prev_closest)
-												{
-													SKSE::log::trace("tur noff");
-													helper::SetGlowColor(
-														prev_closest->Get3D(), &bone_off);
-												}
-												SKSE::log::trace("turn on ");
-												helper::SetGlowColor(
-													cur_closest->Get3D(), &bone_on);
-												// turns back into a weak ptr so don't have to worry about
-												// when the art addons get destroyed
-												closest = cur_closest;
-											}
-										}
-									}
 								}
-								node->Update(ctx);
+								node->UpdateDownwardPass(ctx, 0);
 							}
 							break;
 						case ManagerState::kScale:
@@ -294,110 +337,103 @@ namespace wearable
 															configmode_active_hand)])
 												->world.translate;
 
-										auto vector_to_camera =
-											PlayerCharacter::GetSingleton()
-												->GetNodeByName("NPC Head [Head]")
-												->world.translate -
-											item_hand_pos;
+										helper::FaceCamera(colorUI);
 
-										float heading =
-											std::atan2f(vector_to_camera.y, vector_to_camera.x);
-
-										colorUI->local.rotate.SetEulerAnglesXYZ({ 0, 0, -heading });
-										colorUI->local.rotate =
-											colorUI->parent->world.rotate.Transpose() *
-											colorUI->local.rotate;
-
+										// move UI from player root node to hand
 										colorUI->local.translate =
 											colorUI->parent->world.rotate.Transpose() *
 											(item_hand_pos - colorUI->parent->world.translate);
 										colorUI->local.translate += { 0, 0, 12 };
 										colorUI->Update(ctx);
-										NiTransform t;
-										t.translate = { -4, 0, 0 };
-										if (!testt)
+
+										// Calculate finger location in UI plane
+										auto finger = PlayerCharacter::GetSingleton()
+														  ->GetNodeByName("NPC R Finger12 [RF12]")
+														  ->world;
+										auto vector_to_finger = finger.translate +
+											(finger.rotate * NiPoint3(0, 0, 2)) -
+											colorUI->world.translate;
+
+										auto finger_UI_space =
+											colorUI->world.rotate.Transpose() * vector_to_finger;
+
+										constexpr float extent_top = 7;
+										constexpr float extent_bottom = -7;
+										constexpr float extent_colorwheel_right = 7;
+										constexpr float extent_colorwheel_left = -7;
+										constexpr float extent_valueslider_left = 10;
+										constexpr float extent_valueslider_right = 13;
+										constexpr float extent_glowslider_left = -13;
+										constexpr float extent_glowslider_right = -10;
+
+										float depth = finger_UI_space.x;
+										float y = finger_UI_space.z;
+										float x = finger_UI_space.y;
+
+										if (depth > -3 && depth < 1)
 										{
-											testt = ArtAddon::Make(vrinput::kDebugModelPath,
-												PlayerCharacter::GetSingleton()->AsReference(),
-												colorUI, t);
-										}
-										else
-										{
-											// Calculate finger location in UI plane
-											auto finger =
-												PlayerCharacter::GetSingleton()
-													->GetNodeByName("NPC R Finger12 [RF12]")
-													->world;
-											auto vector_to_finger = finger.translate +
-												(finger.rotate * NiPoint3(0, 0, 2)) -
-												colorUI->world.translate;
-
-											if (auto testnode = testt->Get3D())
+											// check which element is touching
+											if (y < extent_top && y > extent_bottom)
 											{
-												testnode->local.translate =
-													testnode->parent->world.rotate.Transpose() *
-													vector_to_finger;
-											}
+												auto glowcursor =
+													colorUI->GetObjectByName(kglow_name);
+												auto valuecursor =
+													colorUI->GetObjectByName(kvalue_name);
+												auto huecursor =
+													colorUI->GetObjectByName(kcolor_name);
 
-											auto local = colorUI->world.rotate.Transpose() *
-												vector_to_finger;
+												float radius;
 
-											constexpr float       extent_top = 7;
-											constexpr float       extent_bottom = -7;
-											constexpr float       extent_colorwheel_right = 7;
-											constexpr float       extent_colorwheel_left = -7;
-											constexpr float       extent_valueslider_left = 10;
-											constexpr float       extent_valueslider_right = 13;
-											constexpr float       extent_glowslider_left = -13;
-											constexpr float       extent_glowslider_right = -10;
-											constexpr const char* color_name = "cursor_color";
-											constexpr const char* value_name = "cursor_value";
-											constexpr const char* glow_name = "cursor_glow";
-
-											float depth = local.x;
-											float y = local.z;
-											float x = local.y;
-
-											if (depth > -3 && depth < 1)
-											{
-												// check which element is touching
-												if (y < extent_top && y > extent_bottom)
+												if (x < extent_glowslider_right &&
+													x > extent_glowslider_left)
 												{
-													if (x < extent_glowslider_right &&
-														x > extent_glowslider_left)
+													// glow slider
+													glowcursor->local.translate.z = y;
+												}
+												else if (x < extent_valueslider_right &&
+													x > extent_valueslider_left)
+												{
+													// value slider
+													valuecursor->local.translate.z = y;
+												}
+												else if (x < extent_colorwheel_right &&
+													x > extent_colorwheel_left)
+												{
+													// color wheel
+													radius = std::sqrt(y * y + x * x);
+													if (radius < extent_top)
 													{
-														// glow slider
-														auto sliderval = (y - extent_bottom) /
-															(extent_top - extent_bottom);
-														if (auto cursor =
-																colorUI->GetObjectByName(glow_name))
-														{
-															cursor->local.translate.z = y;
-														}
+														huecursor->local.translate.z = y;
+														huecursor->local.translate.y = x;
 													}
-													else if (x < extent_valueslider_right &&
-														x > extent_valueslider_left)
-													{
-														// value slider
-														auto sliderval = (y - extent_bottom) /
-															(extent_top - extent_bottom);
-														if (auto cursor = colorUI->GetObjectByName(
-																value_name))
-														{
-															cursor->local.translate.z = y;
-														}
-													}
-													else if (x < extent_colorwheel_right &&
-														x > extent_colorwheel_left)
-													{
-														// color wheel
-														if (auto cursor = colorUI->GetObjectByName(
-																color_name))
-														{
-															cursor->local.translate.z = y;
-															cursor->local.translate.y = x;
-														}
-													}
+												}
+
+												static int c = 0;
+												// don't need to be changing color every frame
+												if (c++ % 50 == 0)
+												{
+													auto glow = (glowcursor->local.translate.z -
+																	extent_bottom) /
+														(extent_top - extent_bottom) * kMaxGlow;
+
+													auto value = (valuecursor->local.translate.z -
+																	 extent_bottom) /
+														(extent_top - extent_bottom);
+
+													auto hue = (atan2f(huecursor->local.translate.z,
+																	huecursor->local.translate.y) +
+																   std::numbers::pi) /
+														std::numbers::pi;
+
+													auto sat =
+														std::sqrt(huecursor->local.translate.z *
+																huecursor->local.translate.z +
+															huecursor->local.translate.y *
+																huecursor->local.translate.y) /
+														extent_top;
+
+													sp->SetColor(
+														helper::HSV_to_RGB(hue, sat, value), glow);
 												}
 											}
 										}
@@ -405,7 +441,7 @@ namespace wearable
 								}
 							}
 							break;
-						case ManagerState::kCycleAV:
+						case ManagerState::kCycleFunctions:
 							break;
 						}
 					}
@@ -418,18 +454,16 @@ namespace wearable
 				{
 					if (auto sp = it->lock())
 					{
-						if (sp->model->Get3D())
+						// 3. Call individual update functions
+						if (sp->interactable) { sp->Update(); }
+						else
+						// 4. Attach overlap spheres if needed
 						{
-							// 3. Call individual update functions
-							if (sp->interactable) { sp->Update(); }
-							else
-							// 4. Attach overlap spheres if needed
-							{
-								sp->interactable = vrinput::OverlapSphere::Make(sp->model->Get3D(),
-									OverlapHandler, settings.overlap_radius, settings.overlap_angle,
-									sp->active_hand, sp->overlap_offset, sp->overlap_normal);
-							}
+							sp->interactable = vrinput::OverlapSphere::Make(sp->model->Get3D(),
+								OverlapHandler, settings.overlap_radius, settings.overlap_angle,
+								sp->active_hand, sp->overlap_offset, sp->overlap_normal);
 						}
+
 						it++;
 					}
 					else { it = managed_objects.erase(it); }
@@ -438,7 +472,7 @@ namespace wearable
 		}
 	}
 
-	void WearableManager::TransitionState(ManagerState a_next_state)
+	void WearableManager::StateTransition(ManagerState a_next_state)
 	{
 		if (a_next_state != configmode_state)
 		{
@@ -477,34 +511,42 @@ namespace wearable
 									"translate Array:\n {} \n {} \n {}\n", tr[0], tr[1], tr[2]);
 							}
 
-							// switch to new closest parent
-							if (!configmode_skeletons.empty())
+							// switch to new parent
+							if (!configmode_visible_bones.empty())
 							{
-								if (auto closest = FindClosestSkeleton(node).lock())
+								if (auto selected_bone =
+										configmode_visible_bones.at(configmode_parentbone_index %
+											configmode_visible_bones.size()))
 								{
-									auto closest_parent = closest->GetParent();
+									auto new_parent = selected_bone->GetParent();
 
-									node->local.translate =
-										closest_parent->world.rotate.Transpose() *
-										(node->world.translate - closest_parent->world.translate);
-									node->local.rotate = closest_parent->world.rotate.Transpose() *
-										node->world.rotate;
+									node->local.translate = new_parent->world.rotate.Transpose() *
+										(node->world.translate - new_parent->world.translate);
+									node->local.rotate =
+										new_parent->world.rotate.Transpose() * node->world.rotate;
 
-									closest->GetParent()->AsNode()->AttachChild(node);
-									sp->attach_node = closest->GetParent();
+									new_parent->AsNode()->AttachChild(node);
+									sp->attach_node = new_parent;
 								}
-								configmode_skeletons.clear();
+								// hide/delete bone visualization
+								configmode_visible_bones.clear();
 							}
 						}
 					}
 				}
 				break;
 			case ManagerState::kColor:
-				testt.reset();
 				configmode_colorwheel.reset();
 
 				g_vrikInterface->restoreFingers((bool)configmode_active_hand);
 				break;
+			case ManagerState::kCycleFunctions:
+				if (auto sp = configmode_selected_item.lock())
+				{
+					sp->configmode_function_text.reset();
+				}
+				break;
+
 			default:
 				break;
 			}
@@ -531,7 +573,10 @@ namespace wearable
 				{
 					if (auto node = sp->model->Get3D())
 					{
-						if (settings.allow_reattach) { ShowEligibleSkeleton(sp); }
+						if (settings.allow_reattach)
+						{
+							configmode_parentbone_index = ShowEligibleBones(sp);
+						}
 					}
 				}
 				CaptureInitialTransforms();
@@ -544,11 +589,52 @@ namespace wearable
 					NiTransform t;
 					configmode_colorwheel = ArtAddon::Make(kColorWheelModelPath,
 						PlayerCharacter::GetSingleton()->AsReference(),
-						PlayerCharacter::GetSingleton()->Get3D(false), t);
+						PlayerCharacter::GetSingleton()->Get3D(false), t, [](ArtAddon* a) {
+							if (1)
+							{
+								auto mgr = WearableManager::GetSingleton();
+								if (auto sp = mgr->GetSelectedItem().lock())
+								{
+									if (auto model = a->Get3D())
+									{
+										RE::NiColor temp(0,0,0);
+										float       glow = 1.f;
+										sp->GetColor(&temp, &glow);
+
+										auto glowcursor = model->GetObjectByName(mgr->kglow_name);
+										auto valuecursor = model->GetObjectByName(mgr->kvalue_name);
+										auto huecursor = model->GetObjectByName(mgr->kcolor_name);
+
+										auto hsv = helper::RGBtoHSV(temp);
+
+										glowcursor->local.translate.z =
+											-glowcursor->local.translate.z +
+											2 * glowcursor->local.translate.z * glow / kMaxGlow;
+										valuecursor->local.translate.z =
+											-valuecursor->local.translate.z +
+											2 * valuecursor->local.translate.z * hsv.z;
+
+										float theta = hsv.x * std::numbers::pi * 2;
+										float radius = hsv.y * huecursor->local.translate.z;
+
+										huecursor->local.translate.z = radius * std::sin(theta);
+										huecursor->local.translate.y = radius * std::cos(theta);
+									}
+								}
+							}
+						});
 					g_vrikInterface->setFingerRange(
 						(bool)configmode_active_hand, 0, 0, 1.0, 1.0, 0, 0, 0, 0, 0, 0);
 				}
 				break;
+			case ManagerState::kCycleFunctions:
+				if (auto sp = configmode_selected_item.lock())
+				{
+					NiTransform t;
+					t.translate = { 0, 0, 5 };
+					sp->configmode_function_text =
+						std::make_unique<AddonTextBox>(sp->GetFunctionName(), 0.f, sp->Get3D(), t);
+				}
 			default:
 				break;
 			}
@@ -559,7 +645,6 @@ namespace wearable
 
 	void WearableManager::Register(std::weak_ptr<Wearable> a_obj)
 	{
-		std::scoped_lock lock(managed_objects_lock);
 		managed_objects.push_back(a_obj);
 	}
 
@@ -625,7 +710,7 @@ namespace wearable
 				settings.scale, ScaleControl, configmode_active_hand, vrinput::ActionType::kPress);
 			vrinput::AddCallback(
 				settings.color, ColorControl, configmode_active_hand, vrinput::ActionType::kPress);
-			vrinput::AddCallback(settings.cycle_AV, CycleAVControl, configmode_active_hand,
+			vrinput::AddCallback(settings.cycle_AV, CycleFunctionControl, configmode_active_hand,
 				vrinput::ActionType::kPress);
 			vrinput::AddCallback(vr::k_EButton_DPad_Left, LeftStick, configmode_active_hand,
 				vrinput::ActionType::kPress);
@@ -646,7 +731,7 @@ namespace wearable
 				settings.scale, ScaleControl, configmode_active_hand, vrinput::ActionType::kPress);
 			vrinput::RemoveCallback(
 				settings.color, ColorControl, configmode_active_hand, vrinput::ActionType::kPress);
-			vrinput::RemoveCallback(settings.cycle_AV, CycleAVControl, configmode_active_hand,
+			vrinput::RemoveCallback(settings.cycle_AV, CycleFunctionControl, configmode_active_hand,
 				vrinput::ActionType::kPress);
 			vrinput::RemoveCallback(vr::k_EButton_DPad_Left, LeftStick, configmode_active_hand,
 				vrinput::ActionType::kPress);
@@ -677,92 +762,39 @@ namespace wearable
 		}
 	}
 
-	void WearableManager::CycleSelection(bool increment)
-	{
-		switch (configmode_state)
-		{
-		case ManagerState::kIdle:
-			{
-				if (auto sp = configmode_selected_item.lock()) {
-                    sp->CycleSubitems();
-                }
-			}
-			break;
-		case ManagerState::kCycleAV:
-			{
-			}
-			break;
-		case ManagerState::kTranslate:
-			{
-                if  (!configmode_skeletons.empty()){
-                    
-                }
-			}
-			break;
-		default:
-			break;
-		}
-	}
-
-	void WearableManager::ShowEligibleSkeleton(WearablePtr a_selected)
+	int WearableManager::ShowEligibleBones(WearablePtr a_selected)
 	{
 		auto        player = PlayerCharacter::GetSingleton();
 		NiTransform t;
+		int         parent_index = 0;
 
-		for (auto& nodename : a_selected->eligible_attach_nodes)
+		for (auto it = a_selected->eligible_attach_nodes.begin();
+			 it != a_selected->eligible_attach_nodes.end(); it++)
 		{
-			if (auto skeleton = player->Get3D(false)->GetObjectByName(nodename))
+			if (auto bone = player->Get3D(false)->GetObjectByName(*it))
 			{
-				configmode_skeletons.push_back(
-					ArtAddon::Make(vrinput::kDebugModelPath, player->AsReference(), skeleton, t));
-			}
-		}
-	}
-
-	std::weak_ptr<ArtAddon> WearableManager::FindClosestSkeleton(RE::NiAVObject* a_selected)
-	{
-		auto        player = PlayerCharacter::GetSingleton();
-		NiPoint3    target = a_selected->world.translate;
-		float       min = 999999.f;
-		ArtAddonPtr closest;
-
-		for (auto ptr : configmode_skeletons)
-		{
-			if (auto node = ptr->GetParent())
-			{
-				float dist = node->world.translate.GetSquaredDistance(target);
-
-				if (dist < min)
+				if (bone == a_selected->attach_node)
 				{
-					min = dist;
-					closest = ptr;
+					SKSE::log::trace("found parent");
+					parent_index = std::distance(a_selected->eligible_attach_nodes.begin(), it);
+
+					configmode_visible_bones.push_back(ArtAddon::Make(
+						vrinput::kDebugModelPath, player->AsReference(), bone, t, [](ArtAddon* a) {
+							if (auto model = a->Get3D())
+							{
+								helper::SetGlowColor(
+									model, &(WearableManager::GetSingleton()->bone_on));
+							}
+						}));
+				}
+				else
+				{
+					configmode_visible_bones.push_back(
+						ArtAddon::Make(vrinput::kDebugModelPath, player->AsReference(), bone, t));
 				}
 			}
 		}
-
-		return closest;
+		return parent_index;
 	}
-
-	Meter::Meter(const char* a_model_path, RE::NiAVObject* a_attach_node, RE::NiTransform& a_local,
-		RE::NiPoint3 a_overlap_offset, std::vector<MeterType> a_meter_types,
-		std::vector<std::string> a_meternode_names, std::vector<const char*>* a_eligible_nodes) :
-		Wearable(a_model_path, a_attach_node, a_local, a_overlap_offset, vrinput::Hand::kBoth,
-			a_eligible_nodes),
-		eligible_types(a_meter_types),
-		meternode_names(a_meternode_names)
-
-	{
-		model = ArtAddon::Make(
-			a_model_path, PlayerCharacter::GetSingleton()->AsReference(), a_attach_node, a_local);
-		WearableManager::GetSingleton()->Register(weak_from_this());
-	}
-
-	void Meter::Update() {}
-
-	void Meter::CycleSubitems() {}
-
-	void CompoundMeter::Update() {}
-
-	void CompoundMeter::CycleSubitems() {}
 
 }  // namespace wearable

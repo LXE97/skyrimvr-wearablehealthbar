@@ -7,11 +7,10 @@ namespace art_addon
 	using namespace RE;
 
 	std::shared_ptr<ArtAddon> ArtAddon::Make(const char* a_model_path, TESObjectREFR* a_target,
-		NiAVObject* a_attach_node, NiTransform& a_local, std::function<void()> a_callback,
-		bool a_unique)
+		NiAVObject* a_attach_node, NiTransform& a_local, std::function<void(ArtAddon*)> a_callback)
 	{
 		auto manager = ArtAddonManager::GetSingleton();
-		auto art_object = manager->GetArtForm(a_model_path, a_unique);
+		auto art_object = manager->GetArtForm(a_model_path);
 		int  id = manager->GetNextId();
 		//std::scoped_lock lock(manager->objects_lock);
 
@@ -26,7 +25,8 @@ namespace art_addon
 			new_obj->local = a_local;
 			new_obj->attach_node = a_attach_node;
 			new_obj->target = a_target;
-			new_obj->callback = a_callback;
+			if (a_callback) { new_obj->callback = a_callback; }
+
 			manager->new_objects.emplace(id, new_obj);
 			return new_obj;
 		}
@@ -37,10 +37,8 @@ namespace art_addon
 		}
 	}
 
-	/** Ostensibly ApplyArtObject() returns a ModelReferenceEffect handle for the model, but
-	 * it seems to return 1 in all circumstances. So instead we'll clone the created NiNode
-	 * and then delete the ModelReferenceEffect and the original NiNode using the ProcessList.
-	 */
+	/** clone the created NiNode and then delete the ModelReferenceEffect and the original NiNode
+	 *  using the ProcessList. */
 	void ArtAddonManager::Update()
 	{
 		if (!new_objects.empty())
@@ -63,7 +61,7 @@ namespace art_addon
 									addon->attach_node->AsNode()->AttachChild(addon->root3D);
 									a_modelEffect.lifetime = 0;
 									addon->root3D->local = std::move(addon->local);
-									addon->callback();
+									if (addon->callback) { addon->callback(addon.get()); }
 								}
 							}
 							else
@@ -88,9 +86,9 @@ namespace art_addon
 		}
 	}
 
-	BGSArtObject* ArtAddonManager::GetArtForm(const char* a_modelPath, bool a_make_unique)
+	BGSArtObject* ArtAddonManager::GetArtForm(const char* a_modelPath)
 	{
-		if (a_make_unique || !artobject_cache.contains(a_modelPath))
+		if (!artobject_cache.contains(a_modelPath))
 		{
 			if (base_artobject)
 			{
@@ -144,17 +142,17 @@ namespace art_addon
 		}
 	}
 
-	NifTextBox::NifTextBox(const char* a_string, const float a_spacing, RE::NiAVObject* a_attach_to,
-		RE::NiTransform& a_local) :
+	AddonTextBox::AddonTextBox(const char* a_string, const float a_spacing,
+		RE::NiAVObject* a_attach_to, RE::NiTransform& a_local) :
 		string(a_string),
 		spacing(a_spacing)
 	{
 		root =
 			ArtAddon::Make(NifChar::kFontModelPath, PlayerCharacter::GetSingleton()->AsReference(),
-				a_attach_to, a_local, std::bind(&NifTextBox::MakeString, this), true);
+				a_attach_to, a_local, std::bind(&AddonTextBox::MakeString, this));
 	}
 
-	void NifTextBox::MakeString()
+	void AddonTextBox::MakeString()
 	{
 		if (auto root_node = root->Get3D())
 		{
