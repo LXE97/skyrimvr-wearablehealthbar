@@ -38,36 +38,45 @@ namespace wearable_plugin
 
 	std::vector<std::unique_ptr<NifChar>> characters;
 
-	bool ass = true;
-
-	void makeit()
-
-	{
-		NiTransform t;
-		auto        shit =
-			PlayerCharacter::GetSingleton()->Get3D(false)->GetObjectByName("NPC L Hand [LHnd]");
-		int c = 0;
-		while (ass)
-		{
-			c++;
-			if (c > 200)
-			{
-				c = 0;
-				characters.clear();
-				SKSE::log::error("200 reacehd");
-			}
-			else { characters.push_back(std::make_unique<NifChar>('l', shit, t)); }
-			std::this_thread::sleep_for(std::chrono::milliseconds(20));
-		}
-	}
-
 	void OnOverlap(const OverlapEvent& e) {}
 
-	std::shared_ptr<Wearable>             w;
-	NifTextBox*                           x;
-	NifChar*                              p;
-	std::vector<std::unique_ptr<NifChar>> v;
-	bool                                  OnDEBUGBtnPressA(const ModInputEvent& e)
+	std::shared_ptr<Wearable> w;
+
+	void fuckoff(RE::NiAVObject* a_target, bool ff)
+	{
+
+		/*
+		if (auto geom = a_target->AsGeometry())
+		{
+			std::vector<uint32_t> c;
+			NiUpdateData          ctx;
+			if (auto tri = static_cast<BSTriShape*>(geom))
+			{
+				if (auto property = geom->properties[RE::BSGeometry::States::kEffect].get())
+				{
+					if (auto shader = netimmerse_cast<RE::BSLightingShaderProperty*>(property))
+					{
+						if (auto material = static_cast<RE::BSLightingShaderMaterialHairTint*>(
+								shader->material))
+						{
+							material->tintColor = NiColor(0xff0000);
+							shader->lastRenderPassState = std::numeric_limits<std::int32_t>::max();
+
+							material->texCoordOffset[0].x = 0.5f;
+							material->texCoordOffset[0].y = 0.0f;
+							material->texCoordOffset[1].x = 0.5f;
+							material->texCoordOffset[1].y = 0.0f;
+
+							a_target->Update(ctx);
+						}
+					}
+				}
+			}
+		}*/
+	}
+
+	bool ok = false;
+	bool OnDEBUGBtnPressA(const ModInputEvent& e)
 	{
 		if (e.button_state == ButtonState::kButtonDown)
 		{
@@ -75,12 +84,10 @@ namespace wearable_plugin
 
 			if (!menuchecker::isGameStopped())
 			{
-				//x = new NifTextBox("MAGICKA", 0.1f, vrinput::GetHandNode(Hand::kRight, false), l);
-
-				std::thread p1(makeit);
-				p1.detach();
-
 				vrinput::adjustable += 0.002;
+				ok ^= 1;
+				fuckoff(
+					PlayerCharacter::GetSingleton()->GetNodeByName("Bone"), ok);
 			}
 		}
 		return false;
@@ -95,7 +102,7 @@ namespace wearable_plugin
 			if (!menuchecker::isGameStopped())
 			{
 				vrinput::adjustable -= 0.002;
-				ass = false;
+
 				static bool toggle = false;
 				toggle ^= 1;
 				if (toggle)
@@ -110,27 +117,45 @@ namespace wearable_plugin
 	void Update()
 	{
 #ifdef PROFILE
-		static std::vector<long long> update_times;
+		static std::vector<long long> update_times[4];
 
 		auto start = std::chrono::steady_clock::now();
 #endif
-
-		ArtAddonManager::GetSingleton()->Update();
-		OverlapSphereManager::GetSingleton()->Update();
-		WearableManager::GetSingleton()->Update();
+		//ArtAddonManager::GetSingleton()->Update();
 
 #ifdef PROFILE
-		auto end = std::chrono::steady_clock::now();
-		update_times.push_back(
-			std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
+		auto AAend = std::chrono::steady_clock::now();
+#endif
+		//OverlapSphereManager::GetSingleton()->Update();
 
-		if (update_times.size() > 800)
+#ifdef PROFILE
+		auto OVend = std::chrono::steady_clock::now();
+#endif
+		//WearableManager::GetSingleton()->Update();
+
+#ifdef PROFILE
+		auto WBend = std::chrono::steady_clock::now();
+
+		update_times[0].push_back(
+			std::chrono::duration_cast<std::chrono::nanoseconds>(AAend - start).count());
+		update_times[1].push_back(
+			std::chrono::duration_cast<std::chrono::nanoseconds>(OVend - AAend).count());
+		update_times[2].push_back(
+			std::chrono::duration_cast<std::chrono::nanoseconds>(WBend - OVend).count());
+		update_times[3].push_back(
+			std::chrono::duration_cast<std::chrono::nanoseconds>(WBend - start).count());
+
+		if (update_times[0].size() > 800)
 		{
-			auto   max = *std::max_element(update_times.begin(), update_times.end());
-			auto   sum = std::accumulate(update_times.begin(), update_times.end(), 0);
-			double avg = sum / update_times.size();
-			SKSE::log::trace("update ns avg: {} worst: {}", avg, max);
-			update_times.clear();
+			for (int i = 0; i < 4; i++)
+			{
+				auto   max = *std::max_element(update_times[i].begin(), update_times[i].end());
+				auto   min = *std::min_element(update_times[i].begin(), update_times[i].end());
+				auto   sum = std::accumulate(update_times[i].begin(), update_times[i].end(), 0);
+				double avg = sum / update_times[i].size();
+				SKSE::log::trace("update{} ns avg: {} max: {} min: {}", i, avg, max, min);
+				update_times[i].clear();
+			}
 		}
 #endif
 	}
@@ -145,25 +170,23 @@ namespace wearable_plugin
 		t.rotate = { { -0.22850621, -0.9327596, -0.2670444 },
 			{ -0.9581844, 0.21687761, 0.08220619 }, { -0.020597734, 0.2866351, -0.9453561 } };
 		t.translate = { 0.028520077, 0.91731554, 4.03214 };
-		std::vector<std::string>      names = { "meter1" };
-		std::vector<const char*>      parents = { "NPC L ForearmTwist1 [LLt1]",
-				 "NPC L ForearmTwist2 [LLt2]", "NPC L Forearm [LLar]", "NPC L Hand [LHnd]" };
-		std::vector<Meter::MeterType> types = { Meter::MeterType::kHealth,
-			Meter::MeterType::kMagicka, Meter::MeterType::kStamina, Meter::MeterType::kAmmo,
-			Meter::MeterType::kEnchantLeft, Meter::MeterType::kEnchantRight,
-			Meter::MeterType::kShout, Meter::MeterType::kStealth, Meter::MeterType::kTime };
+		std::vector<const char*>       parents = { "NPC L ForearmTwist1 [LLt1]",
+				  "NPC L ForearmTwist2 [LLt2]", "NPC L Forearm [LLar]", "NPC L Hand [LHnd]" };
+		std::vector<Meter::MeterValue> types = { Meter::MeterValue::kHealth,
+			Meter::MeterValue::kMagicka, Meter::MeterValue::kStamina, Meter::MeterValue::kAmmo,
+			Meter::MeterValue::kEnchantLeft, Meter::MeterValue::kEnchantRight,
+			Meter::MeterValue::kShout, Meter::MeterValue::kStealth, Meter::MeterValue::kTime };
 
-		w = std::make_shared<Meter>("armor/SoulGauge/Mara-attach.nif",
+		/*w = std::make_shared<WearableMeter>("Wearable/Mara-attach.nif",
 			player->Get3D(false)->GetObjectByName("NPC L Hand [LHnd]"), t, NiPoint3(-2.0f, 0, 0),
-			types, names, &parents);
-
-		WearableManager::GetSingleton()->Register(w);
+			&parents);
+		WearableManager::GetSingleton()->Register(w);*/
 	}
 
 	void PreGameLoad()
 	{
-		WearableManager::GetSingleton()->TransitionState(ManagerState::kNone);
-		delete x;
+		WearableManager::GetSingleton()->StateTransition(ManagerState::kNone);
+		w.reset();
 	}
 
 	void StartMod()

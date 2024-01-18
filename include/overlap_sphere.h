@@ -7,8 +7,8 @@
 
 namespace vrinput
 {
-	constexpr const char* kDebugAxisModelPath = "debug/HelperSphereAxis.nif";
-	constexpr const char* kDebugModelPath = "debug/HelperSphere.nif";
+	constexpr const char* kDebugAxisModelPath = "Wearable/HelperSphereAxis.nif";
+	constexpr const char* kDebugModelPath = "Wearable/HelperSphere.nif";
 
 	struct OverlapEvent
 	{

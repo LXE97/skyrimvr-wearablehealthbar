@@ -16,13 +16,15 @@ namespace wearable
 		kTranslate,
 		kScale,
 		kColor,
-		kCycleAV
+		kCycleFunctions
 	};
 
 	class Wearable;
 	using WearablePtr = std::shared_ptr<Wearable>;
+
 	class WearableManager
 	{
+		friend Wearable;
 		// TODO: read from file
 		struct Settings
 		{
@@ -45,6 +47,12 @@ namespace wearable
 		};
 
 	public:
+		static constexpr const char* kColorWheelModelPath = "Wearable/colorwheel.nif";
+		static constexpr const char* kcolor_name = "cursor_color";
+		static constexpr const char* kvalue_name = "cursor_value";
+		static constexpr const char* kglow_name = "cursor_glow";
+		static constexpr float       kMaxGlow = 3.0f;
+
 		static WearableManager* GetSingleton()
 		{
 			static WearableManager singleton;
@@ -54,17 +62,20 @@ namespace wearable
 		/** Must be called by main plugin */
 		void Update();
 
-		void TransitionState(ManagerState a_next_state);
+		Settings& GetSettings() { return settings; }
 
-		void Register(std::weak_ptr<Wearable> a_obj);
-
-		Settings&          GetSettings() { return settings; }
 		ManagerState const GetState() { return configmode_state; }
 		void const         SetState(ManagerState a_next) { configmode_next_state = a_next; }
+		std::weak_ptr<Wearable> const GetSelectedItem() { return configmode_selected_item; }
+
+		/** this is only public so that the plugin can shut down config mode on game save event */
+		void        StateTransition(ManagerState a_next_state);
+		void        Register(std::weak_ptr<Wearable> a_obj);
+		RE::NiColor bone_on;
+		RE::NiColor bone_off;
 
 	private:
-		static constexpr const char* kColorWheelModelPath = "colorwheel.nif";
-		static constexpr float       kColorLeashDistance = 400.f;
+		static constexpr float kColorLeashDistance = 400.f;
 
 		WearableManager();
 		~WearableManager() = default;
@@ -78,9 +89,10 @@ namespace wearable
 		static bool PositionControl(const vrinput::ModInputEvent& e);
 		static bool ScaleControl(const vrinput::ModInputEvent& e);
 		static bool ColorControl(const vrinput::ModInputEvent& e);
-		static bool CycleAVControl(const vrinput::ModInputEvent& e);
+		static bool CycleFunctionControl(const vrinput::ModInputEvent& e);
 		static bool LeftStick(const vrinput::ModInputEvent& e);
 		static bool RightStick(const vrinput::ModInputEvent& e);
+		void        CycleSelection(bool increment);
 		static void OverlapHandler(const vrinput::OverlapEvent& e);
 
 		std::weak_ptr<Wearable> FindWearableWithOverlapID(int a_id);
@@ -92,17 +104,12 @@ namespace wearable
 
 		void CaptureInitialTransforms();
 
-		void CycleSelection(bool increment);
-
-		void                               ShowEligibleSkeleton(WearablePtr a_selected);
-		std::weak_ptr<art_addon::ArtAddon> FindClosestSkeleton(RE::NiAVObject* a_selected);
+		int ShowEligibleBones(WearablePtr a_selected);
 
 		std::vector<std::weak_ptr<Wearable>> managed_objects;
 		std::mutex                           managed_objects_lock;
 		Settings                             settings;
 		RE::TESEffectShader*                 shader = nullptr;
-		RE::NiColor                          bone_on;
-		RE::NiColor                          bone_off;
 		std::atomic<ManagerState>            configmode_state = ManagerState::kNone;
 		ManagerState                         configmode_next_state = ManagerState::kNone;
 		RE::NiTransform                      configmode_wearable_initial_world;
@@ -112,9 +119,9 @@ namespace wearable
 		int                                  configmode_selected_subitem_index;
 		int                                  configmode_hovered_sphere_id = 0;
 		vrinput::Hand                        configmode_active_hand;
-		std::vector<art_addon::ArtAddonPtr>  configmode_skeletons;
+		std::vector<art_addon::ArtAddonPtr>  configmode_visible_bones;
+		int                                  configmode_parentbone_index;
 		art_addon::ArtAddonPtr               configmode_colorwheel;
-		art_addon::ArtAddonPtr               testt;
 	};
 
 	/** Represents a model attached to the player body with an accompanying interaction sphere
@@ -134,75 +141,30 @@ namespace wearable
 			active_hand(a_active_hand),
 			overlap_offset(a_overlap_offset),
 			eligible_attach_nodes(*a_eligible_nodes)
-		{}
+		{
+			model = art_addon::ArtAddon::Make(a_model_path,
+				RE::PlayerCharacter::GetSingleton()->AsReference(), a_attach_node, a_local);
+		}
 
 	protected:
-		virtual void Update() = 0;
-		virtual void CycleSubitems() {}
+		virtual void            Update() = 0;
+		virtual RE::NiAVObject* Get3D() { return model->Get3D(); }
+		virtual void            CycleSubitems(bool a_inc) {}
+		virtual void            CycleFunction(bool a_inc) {}
+		virtual void            SetColor(RE::NiColor a_color, float a_alpha) {}
+		virtual void            GetColor(RE::NiColor* out, float* glow) {}
+		virtual const char*     GetFunctionName() = 0;
 
 		art_addon::ArtAddonPtr    model = nullptr;
 		vrinput::OverlapSpherePtr interactable = nullptr;
 
-		RE::NiAVObject*          attach_node;
-		RE::NiTransform          default_local;
-		const char*              model_path;
-		std::vector<const char*> eligible_attach_nodes;
-		vrinput::Hand            active_hand;
-		RE::NiPoint3             overlap_offset;
-		RE::NiPoint3             overlap_normal = { 1, 0, 0 };
-	};
-
-	/** One or more meters in a single model */
-	class Meter : public Wearable
-	{
-		friend WearableManager;
-
-	public:
-		enum class MeterType
-		{
-			kHealth = 0,
-			kMagicka,
-			kStamina,
-			kAmmo,
-			kEnchantLeft,
-			kEnchantRight,
-			kShout,
-			kStealth,
-			kTime
-		};
-
-		Meter(const char* a_model_path, RE::NiAVObject* a_attach_node, RE::NiTransform& a_local,
-			RE::NiPoint3 a_overlap_offset, std::vector<MeterType> a_meter_types,
-			std::vector<std::string>  a_meternode_names,
-			std::vector<const char*>* a_eligible_nodes = nullptr);
-
-		void SetMeterValue(float a_ratio);
-
-	protected:
-		Meter(const Meter&) = delete;
-		Meter(Meter&&) = delete;
-		Meter& operator=(const Meter&) = delete;
-		Meter& operator=(Meter&&) = delete;
-
-		std::vector<MeterType>                     eligible_types;
-		std::vector<std::string>                   meternode_names;
-		std::unordered_map<MeterType, RE::NiColor> color_changes;
-
-	private:
-		void Update() override;
-		void CycleSubitems() override;
-	};
-
-	/** A single meter composed of separate identical models*/
-	class CompoundMeter : public Meter
-	{
-		friend WearableManager;
-
-	public:
-	private:
-		void Update() override;
-		void CycleSubitems() override;
-
-		std::vector<WearablePtr> meters;
+		RE::NiAVObject*                          attach_node;
+		RE::NiTransform                          default_local;
+		const char*                              model_path;
+		std::vector<const char*>                 eligible_attach_nodes;
+		vrinput::Hand                            active_hand;
+		RE::NiPoint3                             overlap_offset;
+		RE::NiPoint3                             overlap_normal = { 1, 0, 0 };
+		std::unique_ptr<art_addon::AddonTextBox> configmode_function_text;
 	};
 }

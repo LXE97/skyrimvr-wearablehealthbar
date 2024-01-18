@@ -13,6 +13,7 @@ namespace art_addon
 {
 	class ArtAddon;
 	using ArtAddonPtr = std::shared_ptr<ArtAddon>;
+
 	class ArtAddon
 	{
 		friend class ArtAddonManager;
@@ -32,8 +33,8 @@ namespace art_addon
 		 */
 		[[nodiscard]] static ArtAddonPtr Make(
 			const char* a_model_path, RE::TESObjectREFR* a_target, RE::NiAVObject* a_attach_node,
-			RE::NiTransform& a_local, std::function<void()> a_callback = [](){},
-			bool a_unique = false);
+			RE::NiTransform&                     a_local,
+			std::function<void(ArtAddon*)> a_callback = nullptr);
 
 		~ArtAddon()
 		{
@@ -51,12 +52,12 @@ namespace art_addon
 		ArtAddon& operator=(const ArtAddon&) = delete;
 		ArtAddon& operator=(ArtAddon&&) = delete;
 
-		RE::NiAVObject*       root3D = nullptr;
-		RE::TESObjectREFR*    target = nullptr;
-		RE::BGSArtObject*     art_object = nullptr;
-		RE::NiAVObject*       attach_node = nullptr;
-		RE::NiTransform       local;
-		std::function<void()> callback;
+		RE::NiAVObject*                      root3D = nullptr;
+		RE::TESObjectREFR*                   target = nullptr;
+		RE::BGSArtObject*                    art_object = nullptr;
+		RE::NiAVObject*                      attach_node = nullptr;
+		RE::NiTransform                      local;
+		std::function<void(ArtAddon*)> callback;
 	};
 
 	class ArtAddonManager
@@ -82,7 +83,7 @@ namespace art_addon
 		ArtAddonManager& operator=(const ArtAddonManager&) = delete;
 		ArtAddonManager& operator=(ArtAddonManager&&) = delete;
 
-		RE::BGSArtObject* GetArtForm(const char* a_modelPath, bool a_make_unique);
+		RE::BGSArtObject* GetArtForm(const char* a_modelPath);
 		int               GetNextId();
 
 		std::unordered_map<int, std::weak_ptr<ArtAddon>>   new_objects;
@@ -101,7 +102,7 @@ namespace art_addon
 		static constexpr const char* kFontModelPath = "ArtAddon/char.nif";
 
 		NifChar(char a_ascii, RE::NiAVObject* a_parent, RE::NiTransform& a_local);
-		~NifChar(){}
+		~NifChar() {}
 
 	private:
 		void OnModelCreation();
@@ -117,12 +118,12 @@ namespace art_addon
 		char        ascii;
 	};
 
-	class NifTextBox
+	class AddonTextBox
 	{
 	public:
-		NifTextBox(const char* a_string, const float a_spacing, RE::NiAVObject* a_attach_to,
+		AddonTextBox(const char* a_string, const float a_spacing, RE::NiAVObject* a_attach_to,
 			RE::NiTransform& a_local);
-		~NifTextBox() { characters.clear(); }
+		~AddonTextBox() { characters.clear(); }
 
 	private:
 		void MakeString();

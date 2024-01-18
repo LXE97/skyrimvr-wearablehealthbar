@@ -12,6 +12,7 @@
 #include "overlap_sphere.h"
 #include "vrikinterface001.h"
 #include "wearable.h"
+#include "meter.h"
 
 namespace wearable_plugin
 {
