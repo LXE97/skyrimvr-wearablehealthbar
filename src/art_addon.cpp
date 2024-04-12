@@ -1,6 +1,11 @@
 #include "art_addon.h"
 
 #include "helper_game.h"
+#include "helper_math.h"
+
+#include <codecvt>
+#include <filesystem>
+#include <locale>
 
 namespace art_addon
 {
@@ -12,11 +17,9 @@ namespace art_addon
 		auto manager = ArtAddonManager::GetSingleton();
 		auto art_object = manager->GetArtForm(a_model_path);
 		int  id = manager->GetNextId();
-		//std::scoped_lock lock(manager->objects_lock);
 
 		/** Using the duration parameter of the BSTempEffect as an ID because anything < 0 has the
-		 * same effect. If another mod happens to use this library there will be ID collisions but
-		 * they are still distinguished by the unique BGSArtObject property. */
+		 * same effect. */
 		if (art_object && a_attach_node && a_target && a_target->IsHandleValid() &&
 			a_target->ApplyArtObject(art_object, (float)id))
 		{
@@ -86,23 +89,41 @@ namespace art_addon
 		}
 	}
 
-	BGSArtObject* ArtAddonManager::GetArtForm(const char* a_modelPath)
+	BGSArtObject* ArtAddonManager::GetArtForm(const char* a_model_path)
 	{
-		if (!artobject_cache.contains(a_modelPath))
+		if (!artobject_cache.contains(a_model_path))
 		{
 			if (base_artobject)
 			{
-				if (auto dupe = base_artobject->CreateDuplicateForm(false, nullptr))
+				HMODULE handle = GetModuleHandle(NULL);
+				char    exe_path[MAX_PATH];
+				// Get the full path of the DLL
+				if (GetModuleFileNameA(handle, exe_path, (sizeof(exe_path))))
 				{
-					auto temp = dupe->As<BGSArtObject>();
-					temp->SetModel(a_modelPath);
-					artobject_cache[a_modelPath] = temp;
-					return temp;
+					std::filesystem::path file_path(exe_path);
+
+					auto data_directory = file_path.parent_path() / "Data\\";
+
+					if (std::filesystem::exists(data_directory / "meshes\\" / a_model_path))
+					{
+						if (auto dupe = base_artobject->CreateDuplicateForm(false, nullptr))
+						{
+							auto temp = dupe->As<BGSArtObject>();
+							temp->SetModel(a_model_path);
+							artobject_cache[a_model_path] = temp;
+							return temp;
+						}
+						else { SKSE::log::error("error creating form for: {}", a_model_path); }
+					}
+					else { SKSE::log::error("not a valid path: {}", a_model_path); }
 				}
+				else { SKSE::log::error("filesystem error"); }
 			}
-			else { return nullptr; }
+			else { SKSE::log::error("base ArtObject not found"); }
+
+			return nullptr;
 		}
-		return artobject_cache[a_modelPath];
+		else { return artobject_cache[a_model_path]; }
 	}
 
 	int ArtAddonManager::GetNextId() { return next_id--; }
@@ -123,7 +144,7 @@ namespace art_addon
 
 	void NifChar::OnModelCreation()
 	{
-		if (auto shader = helper::GetShaderProperty(artaddon->Get3D(), "char"))
+		if (auto shader = helper::GetShaderProperty(artaddon->Get3D(), kNodeName))
 		{
 			auto oldmat = shader->material;
 			auto newmat = oldmat->Create();
@@ -143,13 +164,15 @@ namespace art_addon
 	}
 
 	AddonTextBox::AddonTextBox(const char* a_string, const float a_spacing,
-		RE::NiAVObject* a_attach_to, RE::NiTransform& a_local) :
+		RE::NiAVObject* a_attach_to, RE::NiTransform& a_world) :
 		string(a_string),
-		spacing(a_spacing)
+		spacing(a_spacing),
+		world(a_world)
 	{
+		RE::NiTransform t;
 		root =
 			ArtAddon::Make(NifChar::kFontModelPath, PlayerCharacter::GetSingleton()->AsReference(),
-				a_attach_to, a_local, std::bind(&AddonTextBox::MakeString, this));
+				a_attach_to, t, std::bind(&AddonTextBox::MakeString, this));
 	}
 
 	void AddonTextBox::MakeString()
@@ -162,7 +185,12 @@ namespace art_addon
 				characters.push_back(std::make_unique<NifChar>(string[i], root_node, t));
 				t.translate.y += NifChar::kCharacterWidth + spacing;
 			}
-			root_node->local.rotate;
+			NiUpdateData ctx;
+			root_node->Update(ctx);
+
+			helper::FaceCamera(root_node, true, true, true);
+			root_node->local.translate =
+				root_node->parent->world.rotate.Transpose() * world.translate;
 		}
 	}
 }

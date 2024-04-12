@@ -1,4 +1,6 @@
 #pragma once
+#include "helper_game.h"
+
 #include <algorithm>
 #include <numbers>
 
@@ -36,6 +38,38 @@ namespace helper
 	}
 
 	inline RE::NiPoint3 RGBtoHSV(NiColor rgb)
+	{
+		float r = rgb.red;
+		float g = rgb.green;
+		float b = rgb.blue;
+		float cmax = std::max({ r, g, b });
+		float cmin = std::min({ r, g, b });
+		float delta = cmax - cmin;
+
+		// Calculate hue
+		float h = 0.0;
+		if (delta != 0.0)
+		{
+			if (cmax == r) { h = std::fmod((g - b) / delta, 6.0); }
+			else if (cmax == g) { h = (b - r) / delta + 2.0; }
+			else
+			{  // cmax == b
+				h = (r - g) / delta + 4.0;
+			}
+			h /= 6.0;
+			if (h < 0.0) { h += 1.0; }
+		}
+
+		// Calculate saturation
+		float s = (cmax != 0.0) ? delta / cmax : 0.0;
+
+		// Calculate value
+		float v = cmax;
+
+		return { h, s, v };
+	}
+
+	inline RE::NiPoint3 RGBtoHSV(NiColorA rgb)
 	{
 		float r = rgb.red;
 		float g = rgb.green;
@@ -136,16 +170,53 @@ namespace helper
 
 	inline NiMatrix3 RotateBetweenVectors(const NiPoint3& src, const NiPoint3& dest)
 	{
-		RE::NiPoint3 axis = src.UnitCross(dest);
-		SKSE::log::trace("src {} {} {} dest {} {} {} axis {} {} {} length {}", src.x, src.y, src.z,
-			dest.x, dest.y, dest.z, axis.x, axis.y, axis.z, axis.Length());
-		auto angle = std::acos(helper::DotProductSafe(src, dest));
-		if (axis.Length() < 0.9995f)
-		{  // Handle the case where the vectors are collinear
+		RE::NiPoint3 axis = VectorNormalized(src.Cross(VectorNormalized(dest)));
+
+		auto angle =
+			std::acos(helper::DotProductSafe(VectorNormalized(src), VectorNormalized(dest)));
+
+		if (axis.Length() < 0.0005f)
+		{  // Handle the case where the vectors are colinear
 			axis = src.UnitCross(RE::NiPoint3(std::rand() / RAND_MAX, std::rand() / RAND_MAX, 0));
 		}  // also need to handle case where the angle is extremely small?
+		//if (angle < 0.01 || angle > 3.13) angle = 0.f;
 
 		return helper::getRotationAxisAngle(axis, angle);
+	}
+
+	inline void FaceCamera(RE::NiAVObject* a_target, bool a_x = false, bool a_y = false,
+		bool a_z = true, RE::NiPoint3 a_target_normal = { 1.0, 0.0, 0.0 })
+	{
+		if (a_target)
+		{
+			auto camera = RE::PlayerCharacter::GetSingleton()
+							  ->Get3D(true)
+							  //->GetObjectByName("NPC R Hand [RHnd]")
+							  ->GetObjectByName("NPC Head [Head]")
+							  ->world;
+
+			auto vector_to_camera = VectorNormalized(camera.translate - a_target->world.translate);
+
+			auto zrot = atan2(vector_to_camera.y, vector_to_camera.x);
+			auto cosz = std::cosf(zrot);
+			auto sinz = std::sinf(zrot);
+
+			auto yrot = atan2(vector_to_camera.z,
+				std::sqrt(std::powf(vector_to_camera.x, 2) + std::powf(vector_to_camera.y, 2)));
+
+			//if (vector_to_camera.z < 0) { yrot *= -1.f; }
+
+			auto cosy = std::cosf(yrot);
+			auto siny = std::sinf(yrot);
+
+			RE::NiMatrix3 rotz = { { cosz, -1 * sinz, 0 }, { sinz, cosz, 0 }, { 0, 0, 1 } };
+
+			//RE::NiMatrix3 roty = { { cosy, 0, siny }, { 0, 1, 0 }, { -1 * siny, 0, cosy } };
+
+			a_target->local.rotate =
+				a_target->parent->world.rotate.Transpose()  * rotz;
+
+		}
 	}
 
 	// Interpolate between two rotation matrices using quaternion math (Prog's code)

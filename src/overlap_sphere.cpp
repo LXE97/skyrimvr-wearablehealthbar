@@ -110,12 +110,12 @@ namespace vrinput
 									{
 										if (sphere->overlap_state[0] || sphere->overlap_state[1])
 										{
-											helper::SetGlowColor(visible_node, on);
+											helper::SetGlowColor(visible_node, kOnHexColor);
 										}
 										else if (!sphere->overlap_state[0] &&
 											!sphere->overlap_state[1])
 										{
-											helper::SetGlowColor(visible_node, off_);
+											helper::SetGlowColor(visible_node, kOffHexColor);
 										}
 									}
 								}
@@ -207,7 +207,7 @@ namespace vrinput
 
 	OverlapSphereManager::OverlapSphereManager()
 	{
-		on = new NiColor(kOnHexColor);
-		off_ = new NiColor(kOffHexColor);
+		glow_color_on = new NiColor(kOnHexColor);
+		glow_color_off = new NiColor(kOffHexColor);
 	}
 }

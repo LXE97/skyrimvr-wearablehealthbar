@@ -12,6 +12,7 @@ namespace wearable
 	enum class ManagerState
 	{
 		kNone = 0,
+		kHolding,
 		kIdle,
 		kTranslate,
 		kScale,
@@ -29,20 +30,21 @@ namespace wearable
 		struct Settings
 		{
 			float           overlap_angle = 45.f;
-			float           overlap_radius = 4.f;
+			float           overlap_radius = 8.f;
 			float           movement_scale = 1.0f;
 			float           smoothing = 1.0f;
-			float           reset_distance = 16.f;
+			float           reset_distance = 20.f;
 			int             enter_config_tap_delay_min_ms = 100;
 			int             enter_config_tap_delay_max_ms = 900;
+			int 			update_frames = 10;
 			bool            block_mode_control_on_overlap = true;
 			bool            allow_reattach = true;
 			vr::EVRButtonId enter_config_mode = vr::k_EButton_Grip;
 			vr::EVRButtonId translate = vr::k_EButton_Grip;
-			vr::EVRButtonId scale = vr::k_EButton_SteamVR_Trigger;
+			vr::EVRButtonId scale = vr::k_EButton_ApplicationMenu;
 			vr::EVRButtonId color = vr::k_EButton_A;
-			vr::EVRButtonId cycle_AV = vr::k_EButton_ApplicationMenu;
-			vr::EVRButtonId exit[4] = { vr::k_EButton_SteamVR_Trigger, vr::k_EButton_A,
+			vr::EVRButtonId cycle_AV = vr::k_EButton_SteamVR_Trigger;
+			vr::EVRButtonId exiting_buttons[4] = { vr::k_EButton_SteamVR_Trigger, vr::k_EButton_A,
 				vr::k_EButton_ApplicationMenu, vr::k_EButton_Grip };
 		};
 
@@ -51,7 +53,9 @@ namespace wearable
 		static constexpr const char* kcolor_name = "cursor_color";
 		static constexpr const char* kvalue_name = "cursor_value";
 		static constexpr const char* kglow_name = "cursor_glow";
-		static constexpr float       kMaxGlow = 3.0f;
+		static constexpr float       kMaxGlow = 10.0f;
+		static constexpr int         kBoneOffHex = 0x3dff4a;
+		static constexpr int         kBoneOnHex = 0xff260e;
 
 		static WearableManager* GetSingleton()
 		{
@@ -69,10 +73,8 @@ namespace wearable
 		std::weak_ptr<Wearable> const GetSelectedItem() { return configmode_selected_item; }
 
 		/** this is only public so that the plugin can shut down config mode on game save event */
-		void        StateTransition(ManagerState a_next_state);
-		void        Register(std::weak_ptr<Wearable> a_obj);
-		RE::NiColor bone_on;
-		RE::NiColor bone_off;
+		void StateTransition(ManagerState a_next_state);
+		void Register(std::weak_ptr<Wearable> a_obj);
 
 	private:
 		static constexpr float kColorLeashDistance = 400.f;
@@ -147,13 +149,15 @@ namespace wearable
 		}
 
 	protected:
-		virtual void            Update() = 0;
-		virtual RE::NiAVObject* Get3D() { return model->Get3D(); }
-		virtual void            CycleSubitems(bool a_inc) {}
-		virtual void            CycleFunction(bool a_inc) {}
-		virtual void            SetColor(RE::NiColor a_color, float a_alpha) {}
-		virtual void            GetColor(RE::NiColor* out, float* glow) {}
-		virtual const char*     GetFunctionName() = 0;
+		virtual void            Update(int arg) = 0;
+		virtual RE::NiAVObject* Get3D() { return model ? model->Get3D() : nullptr; }
+
+
+		virtual void        CycleSubitems(bool a_inc) {}
+		virtual void        CycleFunction(bool a_inc) {}
+		virtual void        SetColor(RE::NiColorA a_color) {}
+		virtual void        GetColor(RE::NiColorA* out) {}
+		virtual const char* GetFunctionName() = 0;
 
 		art_addon::ArtAddonPtr    model = nullptr;
 		vrinput::OverlapSpherePtr interactable = nullptr;
