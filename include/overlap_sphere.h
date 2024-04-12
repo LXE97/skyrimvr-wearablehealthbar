@@ -100,8 +100,8 @@ namespace vrinput
 		RE::NiTransform                           hand_transform_cache[2];
 		RE::NiPoint3                              palm_offset = RE::NiPoint3::Zero();
 		bool                                      draw_spheres = false;
-		RE::NiColor*                              on;
-		RE::NiColor*                              off_;
+		RE::NiColor*                              glow_color_on;
+		RE::NiColor*                              glow_color_off;
 		int                                       nextId = 0;
 	};
 

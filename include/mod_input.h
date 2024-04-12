@@ -1,6 +1,7 @@
 #pragma once
 #include "VR/PapyrusVRAPI.h"
 #include "helper_math.h"
+#include "xbyak/xbyak.h"
 
 namespace vrinput
 {
@@ -10,11 +11,10 @@ namespace vrinput
 
 	constexpr std::array all_buttons{
 		vr::k_EButton_System,
-		vr::k_EButton_ApplicationMenu,
+		vr::k_EButton_Knuckles_B,
 		vr::k_EButton_Grip,
 		vr::k_EButton_A,
-		vr::k_EButton_Knuckles_JoyStick,
-		vr::k_EButton_SteamVR_Touchpad,
+		vr::k_EButton_SteamVR_Touchpad, // this is the joystick for index TODO check oculus
 		vr::k_EButton_SteamVR_Trigger,
 	};
 
@@ -46,9 +46,10 @@ namespace vrinput
 
 	struct ModInputEvent
 	{
-		Hand        device;
-		ActionType  touch_or_press;
-		ButtonState button_state;
+		Hand            device;
+		ActionType      touch_or_press;
+		ButtonState     button_state;
+		vr::EVRButtonId button_ID;
 
 		bool operator==(const ModInputEvent& a_rhs)
 		{
@@ -57,10 +58,11 @@ namespace vrinput
 		}
 	};
 
-	// returns: true if input that triggered the event should be blocked
-	// Decision to block controller input to the game is made inside the callback, because we don't want to block it
-	// if e.g. a menu is open or the action bound to this input is not applicable.
-	// If the press is blocked, then we don't need to block the release
+	/* returns: true if input that triggered the event should be blocked
+	* Decision to block controller input to the game is made inside the callback, because we don't
+	* want to block it if e.g. a menu is open or the action bound to this input is not applicable.
+	* If the press is blocked, then we don't need to block the release
+	*/
 	typedef bool (*InputCallbackFunc)(const ModInputEvent& e);
 
 	void StartBlockingAll();
@@ -70,10 +72,9 @@ namespace vrinput
 	void StartSmoothing();
 	void StopSmoothing();
 
-	void AddCallback(const vr::EVRButtonId a_button, const InputCallbackFunc a_callback,
-		const Hand hand, const ActionType touch_or_press);
-	void RemoveCallback(const vr::EVRButtonId a_button, const InputCallbackFunc a_callback,
-		const Hand hand, const ActionType touch_or_press);
+	/* returns the state of the specified button's action type */
+	ButtonState GetButtonState(
+		vr::EVRButtonId a_button_ID, Hand a_hand, ActionType a_touch_or_press);
 
 	const float                   GetTrigger(Hand a);
 	const vr::VRControllerAxis_t& GetJoystick(Hand a);
@@ -90,7 +91,41 @@ namespace vrinput
 			->GetObjectByName(a_hand == Hand::kRight ? kRightHandNodeName : kLeftHandNodeName);
 	}
 
+	/* Adds a function to the list of callbacks for a specific button. The callback will be triggered
+	* on press and release.
+	*/
+	void AddCallback(const InputCallbackFunc a_callback, const vr::EVRButtonId a_button_ID,
+		const Hand a_hand, const ActionType a_touch_or_press);
+	void RemoveCallback(const InputCallbackFunc a_callback, const vr::EVRButtonId a_button_ID,
+		const Hand a_hand, const ActionType a_touch_or_press);
 
+	/* Adds a timed callback that triggers if the button is held for the specific duration. 
+	* Callbacks added while the button is held down will not take effect until it's pressed again.
+	* a_duration: duration in milliseconds 
+	*/
+	void AddHoldCallback(const InputCallbackFunc a_callback,
+		const std::chrono::milliseconds a_duration, const vr::EVRButtonId a_button_ID,
+		const Hand a_hand, const ActionType a_touch_or_press);
+
+	/* Removes all timed callbacks from the button that match the flags (i.e. duration is not considered)
+	*/
+	void RemoveHoldCallback(const InputCallbackFunc a_callback, const vr::EVRButtonId a_button_ID,
+		const Hand a_hand, const ActionType a_touch_or_press);
+
+	// Emulated input functions-- To emulate a button press, 2 events must be sent (touch and press)
+
+	/* Sets an override on the button state that gets sent to Skyrim. Other mods will not see this */
+	void SetFakeButtonState(const ModInputEvent a_event);
+
+	/* Clears an override, otherwise fake button state persists forever. Does nothing if no override exists */
+	void ClearFakeButtonState(const ModInputEvent a_event);
+
+	/* Sets a momentary button state, the button will be returned to its true state in the next update.
+	*/
+	void SendFakeInputEvent(const ModInputEvent a_event);
+
+
+	/* This needs to be fed to OVRHookManager::RegisterControllerStateCB() */
 	bool ControllerInputCallback(vr::TrackedDeviceIndex_t unControllerDeviceIndex,
 		const vr::VRControllerState_t* pControllerState, uint32_t unControllerStateSize,
 		vr::VRControllerState_t* pOutputControllerState);

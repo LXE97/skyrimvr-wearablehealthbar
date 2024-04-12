@@ -1,34 +1,18 @@
-#include "Relocation.h"
-#include "SKSE/Impl/Stubs.h"
-#include "main_plugin.h"
-#include "xbyak/xbyak.h"
+#include "hooks.h"
 
 namespace hooks
 {
 	float g_detection_level = -1.0f;
-	// hook from Doodlum/Contextual Crosshair
-	struct StealthMeter_Update
-	{
-		static char thunk(RE::StealthMeter* a1, int64_t a2, int64_t a3, int64_t a4)
-		{
-			auto result = func(a1, a2, a3, a4);
-
-			g_detection_level = static_cast<float>(a1->unk88);
-
-			return result;
-		}
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
 
 	void PostWandUpdateHook() { wearable_plugin::Update(); }
 
-	// thanks to FlyingParticle for this hook
+	// thanks to FlyingParticle for this code
 	uintptr_t postWandUpdateHookedFuncAddr = 0;
-	// A call shortly after the wand nodes are updated as part of Main::Draw()
-	auto postWandUpdateHookLoc = RelocAddr<uintptr_t>(0x13233AA);
+	// A call shortly after the Higgs call shortly after the wand nodes are updated as part of Main::Draw()
+	auto postWandUpdateHookLoc = RelocAddr<uintptr_t>(0x13233C7);
 	auto postWandUpdateHookedFunc = RelocAddr<uintptr_t>(0xDCF900);
 
-	static void Install()
+	void Install()
 	{
 		stl::write_vfunc<0x1, StealthMeter_Update>(RE::VTABLE_StealthMeter[0]);
 
@@ -73,7 +57,6 @@ namespace hooks
 				postWandUpdateHookLoc.GetUIntPtr(), trampoline.allocate(code));
 
 			SKSE::log::trace("Post Wand Update hook complete");
-			
 		}
 	}
 }

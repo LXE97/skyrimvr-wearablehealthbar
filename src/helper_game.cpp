@@ -85,21 +85,19 @@ namespace helper
 
 	void SetGlowMult() {}
 
-	void SetGlowColor(NiAVObject* a_target, NiColor* c)
+	void SetGlowColor(NiAVObject* a_target, int a_color_hex)
 	{
 		if (a_target)
 		{
-			if (auto geometry =
-					a_target->GetFirstGeometryOfShaderType(RE::BSShaderMaterial::Feature::kGlowMap))
+			// if target has no geometry, try first child
+			BSGeometry* geom = a_target->AsGeometry();
+			if (!geom) { geom = a_target->AsNode()->GetChildren().front()->AsGeometry(); }
+			if (auto shaderProp = GetShaderProperty(geom))
 			{
-				if (auto shaderProp = geometry->GetGeometryRuntimeData()
-										  .properties[RE::BSGeometry::States::kEffect]
-										  .get())
+				if (auto shader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProp))
 				{
-					if (auto shader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProp))
-					{
-						shader->emissiveColor = c;
-					}
+					NiColor temp(a_color_hex);
+					*(shader->emissiveColor) = temp;
 				}
 			}
 		}
@@ -130,14 +128,12 @@ namespace helper
 
 	void SetSpecularMult() {}
 	void SetSpecularColor() {}
-	void SetTintColor() {}
 
 	void CastSpellInstant(Actor* src, Actor* a_target, SpellItem* a_spell)
 	{
 		if (src && a_target && a_spell)
 		{
-			auto caster = src->GetMagicCaster(MagicSystem::CastingSource::kInstant);
-			if (caster)
+			if (auto caster = src->GetMagicCaster(MagicSystem::CastingSource::kInstant))
 			{
 				caster->CastSpellImmediate(a_spell, false, a_target, 1.0, false, 1.0, src);
 			}
@@ -148,8 +144,10 @@ namespace helper
 	{
 		if (src && a_target && a_spell)
 		{
-			auto handle = src->GetHandle();
-			if (handle) { a_target->GetMagicTarget()->DispelEffect(a_spell, handle); }
+			if (auto handle = src->GetHandle())
+			{
+				a_target->GetMagicTarget()->DispelEffect(a_spell, handle);
+			}
 		}
 	}
 

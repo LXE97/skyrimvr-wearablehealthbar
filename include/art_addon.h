@@ -31,9 +31,8 @@ namespace art_addon
          * a_attach_node:	parent node for the new 3D, must be a 3rd person node for the player
          * a_local:      	transform relative to the attachNode
 		 */
-		[[nodiscard]] static ArtAddonPtr Make(
-			const char* a_model_path, RE::TESObjectREFR* a_target, RE::NiAVObject* a_attach_node,
-			RE::NiTransform&                     a_local,
+		[[nodiscard]] static ArtAddonPtr Make(const char* a_model_path, RE::TESObjectREFR* a_target,
+			RE::NiAVObject* a_attach_node, RE::NiTransform& a_local,
 			std::function<void(ArtAddon*)> a_callback = nullptr);
 
 		~ArtAddon()
@@ -52,11 +51,11 @@ namespace art_addon
 		ArtAddon& operator=(const ArtAddon&) = delete;
 		ArtAddon& operator=(ArtAddon&&) = delete;
 
-		RE::NiAVObject*                      root3D = nullptr;
-		RE::TESObjectREFR*                   target = nullptr;
-		RE::BGSArtObject*                    art_object = nullptr;
-		RE::NiAVObject*                      attach_node = nullptr;
-		RE::NiTransform                      local;
+		RE::NiAVObject*                root3D = nullptr;
+		RE::TESObjectREFR*             target = nullptr;
+		RE::BGSArtObject*              art_object = nullptr;
+		RE::NiAVObject*                attach_node = nullptr;
+		RE::NiTransform                local;
 		std::function<void(ArtAddon*)> callback;
 	};
 
@@ -99,7 +98,8 @@ namespace art_addon
 		static constexpr float       kUVOffset_x = 0.0625f;
 		static constexpr float       kUVOffset_y = 0.125f;
 		static constexpr float       kCharacterWidth = 0.5f;
-		static constexpr const char* kFontModelPath = "ArtAddon/char.nif";
+		static constexpr const char* kFontModelPath = "wearable/char2.nif";
+		static constexpr const char* kNodeName = "char";
 
 		NifChar(char a_ascii, RE::NiAVObject* a_parent, RE::NiTransform& a_local);
 		~NifChar() {}
@@ -122,7 +122,7 @@ namespace art_addon
 	{
 	public:
 		AddonTextBox(const char* a_string, const float a_spacing, RE::NiAVObject* a_attach_to,
-			RE::NiTransform& a_local);
+			RE::NiTransform& a_world);
 		~AddonTextBox() { characters.clear(); }
 
 	private:
@@ -132,6 +132,7 @@ namespace art_addon
 		std::vector<std::unique_ptr<NifChar>> characters;
 		const char*                           string;
 		const float                           spacing;
+		RE::NiTransform                       world;
 	};
 
 }

@@ -28,48 +28,19 @@ namespace vrinput
 	vr::TrackedDeviceIndex_t g_leftcontroller;
 	vr::TrackedDeviceIndex_t g_rightcontroller;
 
+	std::deque<std::pair<ModInputEvent, vr::EVRButtonId>> fake_event_queue_left;
+	std::deque<std::pair<ModInputEvent, vr::EVRButtonId>> fake_event_queue_right;
+
 	vr::VRControllerAxis_t joystick[2] = {};
 	float                  trigger[2];
 
 	// each button id is mapped to a list of callback funcs
 	std::unordered_map<int, std::vector<InputCallback>> callbacks;
-	std::unordered_map<vr::EVRButtonId, bool>           buttonStates;
 
-	RE::NiTransform HmdMatrixToNiTransform(const HmdMatrix34_t& hmdMatrix)
-	{
-		RE::NiTransform niTransform;
+	// I'm just going to store these the same way they come in
+	std::array<std::array<uint64_t, 2>, 2> button_states = { { { 0ull, 0ull }, { 0ull, 0ull } } };
 
-		// Copy rotation matrix
-		for (int i = 0; i < 3; ++i)
-		{
-			for (int j = 0; j < 3; ++j) { niTransform.rotate.entry[i][j] = hmdMatrix.m[i][j]; }
-		}
-
-		// Copy translation vector
-		niTransform.translate.x = hmdMatrix.m[0][3];
-		niTransform.translate.y = hmdMatrix.m[1][3];
-		niTransform.translate.z = hmdMatrix.m[2][3];
-
-		return niTransform;
-	}
-
-	HmdMatrix34_t NiTransformToHmdMatrix(const RE::NiTransform& niTransform)
-	{
-		HmdMatrix34_t hmdMatrix;
-
-		// Copy rotation matrix
-		for (int i = 0; i < 3; ++i)
-		{
-			for (int j = 0; j < 3; ++j) { hmdMatrix.m[i][j] = niTransform.rotate.entry[i][j]; }
-		}
-
-		// Copy translation vector
-		hmdMatrix.m[0][3] = niTransform.translate.x;
-		hmdMatrix.m[1][3] = niTransform.translate.y;
-		hmdMatrix.m[2][3] = niTransform.translate.z;
-
-		return hmdMatrix;
-	}
+	std::vector<ModInputEvent> fake_button_states;
 
 	void StartBlockingAll() { block_all_inputs = true; }
 	void StopBlockingAll() { block_all_inputs = false; }
@@ -78,7 +49,14 @@ namespace vrinput
 	void StartSmoothing() { smoothing = 1; }
 	void StopSmoothing() { smoothing = 0; }
 
-	void AddCallback(const vr::EVRButtonId a_button, const InputCallbackFunc a_callback,
+	ButtonState GetButtonState(
+		vr::EVRButtonId a_button_ID, Hand a_hand, ActionType a_touch_or_press)
+	{
+		return (ButtonState)((
+			bool)(button_states[(int)a_hand][(int)a_touch_or_press] & 1ull << a_button_ID));
+	}
+
+	void AddCallback(const InputCallbackFunc a_callback, const vr::EVRButtonId a_button,
 		const Hand hand, const ActionType touch_or_press)
 	{
 		std::scoped_lock lock(callback_lock);
@@ -87,7 +65,7 @@ namespace vrinput
 		callbacks[a_button].push_back(InputCallback(hand, touch_or_press, a_callback));
 	}
 
-	void RemoveCallback(const vr::EVRButtonId a_button, const InputCallbackFunc a_callback,
+	void RemoveCallback(const InputCallbackFunc a_callback, const vr::EVRButtonId a_button,
 		const Hand hand, const ActionType touch_or_press)
 	{
 		std::scoped_lock lock(callback_lock);
@@ -98,9 +76,42 @@ namespace vrinput
 		if (it != callbacks[a_button].end()) { callbacks[a_button].erase(it); }
 	}
 
+	void AddHoldCallback(const InputCallbackFunc a_callback,
+		const std::chrono::milliseconds a_duration, const vr::EVRButtonId a_button_ID,
+		const Hand a_hand, const ActionType a_touch_or_press)
+	{
+		// TODO AddHoldCallback
+	}
+
+	void RemoveHoldCallback(const InputCallbackFunc a_callback, const vr::EVRButtonId a_button_ID,
+		const Hand a_hand, const ActionType a_touch_or_press)
+	{
+		// TODO RemoveHoldCallback
+	} 
+
+	void SendFakeInputEvent(const ModInputEvent a_event)
+	{
+		if (a_event.device == Hand::kLeft)
+		{
+			fake_event_queue_left.push_back(std::make_pair(a_event, a_event.button_ID));
+		}
+		else { fake_event_queue_right.push_back(std::make_pair(a_event, a_event.button_ID)); }
+	}
+
+	void SetFakeButtonState(const ModInputEvent a_event) { fake_button_states.push_back(a_event); }
+
+	void ClearFakeButtonState(const ModInputEvent a_event)
+	{
+		auto it = std::find(fake_button_states.begin(), fake_button_states.end(), a_event);
+		if (it != fake_button_states.end()) { fake_button_states.erase(it); }
+	}
+
 	void ProcessButtonChanges(uint64_t changedMask, uint64_t currentState, bool isLeft, bool touch,
 		vr::VRControllerState_t* out)
 	{
+		// update private button states
+		button_states[isLeft][touch] = currentState;
+
 		// iterate through each of the button codes that we care about
 		for (auto buttonID : all_buttons)
 		{
@@ -181,6 +192,47 @@ namespace vrinput
 		joystick[isLeft] = a_joystick;
 	}
 
+	/* For spoofing button presses. VRTools lets us clear bits but not set them.
+	* see https://github.com/SkyrimAlternativeDevelopers/SkyrimVRTools/blob/master/src/hooks/HookVRSystem.cpp#L91
+	* this code is effectively:
+	* finalState.ulButtonPressed |= modifiedControllerState.ulButtonPressed;
+	* finalState.ulButtonTouched |= modifiedControllerState.ulButtonTouched;
+	*/
+	struct AsmSetControllerState : Xbyak::CodeGenerator
+	{
+		AsmSetControllerState()
+		{
+			or_(r12, ptr[rbp - 0x68]);
+			or_(r13, ptr[rbp - 0x60]);
+			ret();
+		}
+	};
+
+	struct AsmSetControllerAxes : Xbyak::CodeGenerator
+	{
+		AsmSetControllerAxes()
+		{
+			//TODO: check if other mods are overwriting, probably don't need to write to all of these
+
+			// joystick.x (arg1)
+			movss(ptr[rbp - 0x98], xmm0);
+			movss(ptr[rbp - 0x58], xmm0);
+			movss(ptr[rbp - 0x18], xmm0);
+			// joystick.y (arg2)
+			movss(ptr[rbp - 0x94], xmm1);
+			movss(ptr[rbp - 0x54], xmm1);
+			movss(ptr[rbp - 0x14], xmm1);
+			movss(xmm15, xmm1);
+			// trigger (arg3)
+			movss(ptr[rbp - 0x90], xmm2);
+			movss(ptr[rbp - 0x50], xmm2);
+			movss(ptr[rbp - 0x10], xmm2);
+			movss(xmm14, xmm2);
+
+			ret();
+		}
+	};
+
 	// handles low level button/trigger events
 	bool ControllerInputCallback(vr::TrackedDeviceIndex_t unControllerDeviceIndex,
 		const vr::VRControllerState_t* pControllerState, uint32_t unControllerStateSize,
@@ -191,7 +243,7 @@ namespace vrinput
 		static uint64_t prev_touched[2] = {};
 
 		// need to remember the last output sent to the game in order to maintain input blocking
-		static uint64_t prev_Pressed_out[2] = {};
+		static uint64_t prev_pressed_out[2] = {};
 		static uint64_t prev_touched_out[2] = {};
 
 		if (pControllerState && !menuchecker::isGameStopped())
@@ -210,9 +262,9 @@ namespace vrinput
 					ProcessButtonChanges(pressed_change, pControllerState->ulButtonPressed, isLeft,
 						false, pOutputControllerState);
 					prev_pressed[isLeft] = pControllerState->ulButtonPressed;
-					prev_Pressed_out[isLeft] = pOutputControllerState->ulButtonPressed;
+					prev_pressed_out[isLeft] = pOutputControllerState->ulButtonPressed;
 				}
-				else { pOutputControllerState->ulButtonPressed = prev_Pressed_out[isLeft]; }
+				else { pOutputControllerState->ulButtonPressed = prev_pressed_out[isLeft]; }
 
 				if (touched_change)
 				{
@@ -230,9 +282,117 @@ namespace vrinput
 					pOutputControllerState->rAxis->x = 0.0f;
 					pOutputControllerState->rAxis->y = 0.0f;
 				}
+
+				auto local_trigger = pControllerState->rAxis[1].x;
+
+				// momentary button spoofing
+				if ((isLeft && !fake_event_queue_left.empty()) ||
+					(!isLeft && !fake_event_queue_right.empty()))
+				{
+					static std::deque<std::pair<ModInputEvent, vr::EVRButtonId>>* spoof_queue;
+					spoof_queue = isLeft ? &fake_event_queue_left : &fake_event_queue_right;
+
+					do {
+						auto&     event = spoof_queue->front();
+						uint64_t* state = event.first.touch_or_press == ActionType::kPress ?
+							&(pOutputControllerState->ulButtonPressed) :
+							&(pOutputControllerState->ulButtonTouched);
+
+						*state = event.first.button_state == ButtonState::kButtonDown ?
+							*state | 1ull << event.second :
+							*state & ~(1ull << event.second);
+
+						if (event.second == k_EButton_SteamVR_Trigger)
+						{
+							if (event.first.button_state == ButtonState::kButtonDown &&
+								event.first.touch_or_press == ActionType::kPress)
+							{
+								local_trigger = 1.f;
+							}
+							else { local_trigger = 0.f; }
+						}
+
+						spoof_queue->pop_front();
+
+					} while (!spoof_queue->empty());
+				}
+
+				// hold button spoofing
+				for (auto& event : fake_button_states)
+				{
+					if (isLeft == (bool)event.device)
+					{
+						uint64_t* state = event.touch_or_press == ActionType::kPress ?
+							&(pOutputControllerState->ulButtonPressed) :
+							&(pOutputControllerState->ulButtonTouched);
+
+						*state = event.button_state == ButtonState::kButtonDown ?
+							*state | 1ull << event.button_ID :
+							*state & ~(1ull << event.button_ID);
+
+						if (event.button_ID == k_EButton_SteamVR_Trigger &&
+							event.touch_or_press == ActionType::kPress)
+						{
+							if (event.button_state == ButtonState::kButtonDown)
+							{
+								local_trigger = 1.f;
+							}
+							else { local_trigger = 0.f; }
+						}
+					}
+				}
+
+				// TODO: make these static?
+
+				AsmSetControllerAxes code_set_axes;
+				code_set_axes.ready();
+				auto SetControllerAxes = code_set_axes.getCode<void (*)(float, float, float)>();
+				SetControllerAxes(
+					pControllerState->rAxis[0].x, pControllerState->rAxis[0].y, local_trigger);
+
+				AsmSetControllerState code_set_buttons;
+				code_set_buttons.ready();
+				auto SetControllerStateFunc = code_set_buttons.getCode<void (*)(void)>();
+				SetControllerStateFunc();
 			}
 		}
 		return true;
+	}
+
+	RE::NiTransform HmdMatrixToNiTransform(const HmdMatrix34_t& hmdMatrix)
+	{
+		RE::NiTransform niTransform;
+
+		// Copy rotation matrix
+		for (int i = 0; i < 3; ++i)
+		{
+			for (int j = 0; j < 3; ++j) { niTransform.rotate.entry[i][j] = hmdMatrix.m[i][j]; }
+		}
+
+		// Copy translation vector
+		niTransform.translate.x = hmdMatrix.m[0][3];
+		niTransform.translate.y = hmdMatrix.m[1][3];
+		niTransform.translate.z = hmdMatrix.m[2][3];
+
+		return niTransform;
+	}
+
+	HmdMatrix34_t NiTransformToHmdMatrix(const RE::NiTransform& niTransform)
+	{
+		HmdMatrix34_t hmdMatrix;
+
+		// Copy rotation matrix
+		for (int i = 0; i < 3; ++i)
+		{
+			for (int j = 0; j < 3; ++j) { hmdMatrix.m[i][j] = niTransform.rotate.entry[i][j]; }
+		}
+
+		// Copy translation vector
+		hmdMatrix.m[0][3] = niTransform.translate.x;
+		hmdMatrix.m[1][3] = niTransform.translate.y;
+		hmdMatrix.m[2][3] = niTransform.translate.z;
+
+		return hmdMatrix;
 	}
 
 	// handles device poses
@@ -254,7 +414,6 @@ namespace vrinput
 				auto cur = HmdMatrixToNiTransform(pGamePoseArray[device].mDeviceToAbsoluteTracking);
 
 				// TODO: real filtering algorithm
-				// simple noise gate
 				constexpr float low_rate = 0.04f;
 				constexpr float mid_rate = 0.14f;
 				constexpr float high_rate = 0.2f;
