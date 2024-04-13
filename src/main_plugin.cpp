@@ -81,8 +81,8 @@ namespace wearable_plugin
 	{
 		NiTransform t;
 		t.translate = { 0.f, 30.f, 0.f };
-		HolsterSettings settings = { //.model_path = "wearable/HelperSphereAxis.nif",
-			.model_path = "dlc01/weapons/crossbow/steelbolt_clone.nif",
+		HolsterSettings settings = {
+			.model_path = "dlc01/weapons/dwarven crossbow/dwarvenbolt.nif",
 			.attach_node = PlayerCharacter::GetSingleton()->Get3D(false)->GetObjectByName(
 				"NPC L Thigh [LThg]"),
 			.eligible_parents = { "NPC Pelvis [Pelv]", "NPC L Thigh [LThg]", "NPC R Thigh [RThg]",

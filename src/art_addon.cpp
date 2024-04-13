@@ -40,6 +40,23 @@ namespace art_addon
 		}
 	}
 
+	void RemoveCollisionNodes(NiAVObject* a_node)
+	{
+		if (a_node != nullptr)
+		{
+			if (a_node->collisionObject){
+				SKSE::log::error("Removing collision from {}", a_node->name.c_str());
+				a_node->collisionObject = nullptr;
+			}
+			
+			if (auto ninode = a_node->AsNode()){
+				for (auto c : ninode->GetChildren()){
+					RemoveCollisionNodes(c.get());
+				}
+			}
+		}
+	}
+
 	/** clone the created NiNode and then delete the ModelReferenceEffect and the original NiNode
 	 *  using the ProcessList. */
 	void ArtAddonManager::Update()
@@ -64,6 +81,10 @@ namespace art_addon
 									addon->attach_node->AsNode()->AttachChild(addon->root3D);
 									a_modelEffect.lifetime = 0;
 									addon->root3D->local = std::move(addon->local);
+
+									// .nifs with collision will not be drawn when they're attached to player
+									RemoveCollisionNodes(addon->root3D);
+
 									if (addon->callback) { addon->callback(addon.get()); }
 								}
 							}
