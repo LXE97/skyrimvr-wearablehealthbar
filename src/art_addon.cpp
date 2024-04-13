@@ -95,29 +95,14 @@ namespace art_addon
 		{
 			if (base_artobject)
 			{
-				HMODULE handle = GetModuleHandle(NULL);
-				char    exe_path[MAX_PATH];
-				// Get the full path of the DLL
-				if (GetModuleFileNameA(handle, exe_path, (sizeof(exe_path))))
+				if (auto dupe = base_artobject->CreateDuplicateForm(false, nullptr))
 				{
-					std::filesystem::path file_path(exe_path);
-
-					auto data_directory = file_path.parent_path() / "Data\\";
-
-					if (std::filesystem::exists(data_directory / "meshes\\" / a_model_path))
-					{
-						if (auto dupe = base_artobject->CreateDuplicateForm(false, nullptr))
-						{
-							auto temp = dupe->As<BGSArtObject>();
-							temp->SetModel(a_model_path);
-							artobject_cache[a_model_path] = temp;
-							return temp;
-						}
-						else { SKSE::log::error("error creating form for: {}", a_model_path); }
-					}
-					else { SKSE::log::error("not a valid path: {}", a_model_path); }
+					auto temp = dupe->As<BGSArtObject>();
+					temp->SetModel(a_model_path);
+					artobject_cache[a_model_path] = temp;
+					return temp;
 				}
-				else { SKSE::log::error("filesystem error"); }
+				else { SKSE::log::error("error creating form for: {}", a_model_path); }
 			}
 			else { SKSE::log::error("base ArtObject not found"); }
 
