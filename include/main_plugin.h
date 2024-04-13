@@ -13,6 +13,7 @@
 #include "vrikinterface001.h"
 #include "wearable.h"
 #include "meter.h"
+#include "holster.h"
 
 namespace wearable_plugin
 {

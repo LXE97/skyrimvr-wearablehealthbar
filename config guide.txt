@@ -1,0 +1,171 @@
+### Potion belt, quiver, health meters, wristwatch/pocketwatch: this mod adds a variety of interactive gear that is attached to the player's VR body without taking up any equipment slots. 
+
+# FAQ
+### Q: Is this mod script-heavy?
+### A: No, the only Papyrus scripts are those necessary for Mod Configuration Menu (MCM). Nothing else runs outside of the menu except the SKSE code. 
+
+# How to use
+By default, none of the features are enabled; each wearable must be activated in the MCM.
+
+All of the mod settings are saved to the currently-selected profile within the MCM each time the pause menu is closed. The current choice of profile is saved with your savegame. 
+
+* _Underlined Words_ denote settings that can be changed in the MCM. A list of these settings and their location in the MCM sub-menus can be found at the end of this guide.
+
+# Installation
+Install with a mod manager or extract the contents to SkyrimVR/Data/ and enable the .esp
+
+This mod is ESL-flagged.
+
+# Detailed Description
+
+## Wearable Gear
+They come in 2 categories:
+1. Display Type wearables change their appearance in relation to some value (time, stealth level, shout cooldown, etc.) 
+2. Holster Type wearables perform an action when you interact with them. Your hand must be in a "grabbable state" (defined by your HIGGS configuration) to use them. There are 2 methods of interaction; choose one in the wearable's MCM:
+
+* Classic (default): just like a VRIK holster. Hover over the item, then press and release the assigned button to activate it.
+
+* Hold & Sweep: Press the assigned button, whether you're inside the holster's radius or not. Once you hover over the holster with its button held down, the controller will begin vibrating. Move the controller outside of the item's interaction radius while continuing to hold the button, and it will be activated. If you release the button while hovering over the item, the interaction will be canceled. For holsters with multiple buttons assigned (such as different arrow types), it's a bit more complicated: you still use the main interaction button, but once you've entered the overlap zone and the controller is vibrating, you tap the additional button (multi-tap included) and then bring the controller out of the zone while continuing to hold the main interaction button. 
+The intent behind this mode is to allow you to reliably interact with a Holster without looking at it, while avoiding unwanted haptic feedback.
+
+In either mode, button presses will not be sent to the game from a controller that's inside a Holster's overlap zone.
+
+### Quiver (holster type)
+This works exactly like the essential mod Simple Realistic Archery VR, with some improvements:
+1. Seamless arrow nocking: When you draw an arrow and keep the button pressed, the arrow will automatically be nocked when you bring it close to the string (_Auto Nock Distance_). Then you can draw and release the button to fire, all from the same button press. This works for any of the quiver buttons, not just the trigger.
+2. Easier arrow assignment: Press and hold one of the assigned arrow buttons for 2 seconds. A window will appear with a list of all the arrows in your inventory; select one to assign it to that slot. This also applies to multi-tap slots. If you have Quickloot VR installed, you can choose to use that menu instead.
+3. More flexible buttons: I noticed SRAVR doesn't do input blocking, so while you could in theory assign B to fire arrows, A to ice arrows, and Grip to lightning arrows, those button presses will also trigger their normal Skyrim actions. Buttons pressed while hovering over this mod's quiver don't get sent to the game if they result in an arrow being equipped.
+4. Visible, movable model: You can attach it to any bone on the player body, or to your headset (like SRAVR). Choose any of the base game quiver models, and grab it to move it around like a VRIK holster. 
+5. Arrow indicator: Vanilla quivers can display 0-6 arrows. You can configure the number of arrows each one of these visible arrows represents. Optionally, they will also change into your last-used arrow type.
+
+The default settings for this module are identical to those of Simple Realistic Archery VR. If you want to reposition the quiver, you may find VRIK's Selfie Mode helpful, or you can choose from Hip or Shoulder presets in the MCM.
+
+One feature of SRAVR that is not implemented is the Attribute Costs. If you want that feature, you can use this mod alongside SRAVR. Just set the Quiver Size option in SRAVR to 0 to disable its quiver functionality. Likewise, if you are happy with SRAVR and just want to use the Seamless Arrow Nocking feature from this mod, you can enable it separately in the Quiver MCM submenu.
+
+### Potion/Poison Belt (holster type)
+Comes in single- or multi-holster varieties. 
+This works like the Quiver, but for potions. By default, there are no potions assigned. Press and hold the assigned button while hovering over the holster to open a menu showing all of the potions in your inventory. Select a potion, and its *first* listed effect will be assigned to that slot. Activating the slot will place a potion in your hand with the corresponding effect, to be consumed with HIGGS gestures.
+
+Potions are selected from your inventory by "Pure" or "Lazy" assignment: Pure only matches single-effect potions, while Lazy will equip any potion with at least 1 matching effect.
+Potions which restore Health, Magicka, or Stamina are also selected by "Greedy" or "Careful" assignment: Greedy chooses the smallest potion that will completely restore the attribute, allowing for overflow. If no such potion exists, the largest will be chosen. Careful chooses the largest potion that does not overflow- if that's impossible, the smallest will be chosen. Potions which don't restore attributes, like Fire Resistance, are always chosen strongest-first.
+
+Poisons can be assigned in the exact same manner. They are applied to the weapon in your other hand when you "drink" them (this is HIGGS behavior).
+
+The Multi-holster can either have multiple buttons assigned, or a single button with multi-tap enabled, and the empty visible slots will be filled left-to-right as you assign different potion types to different inputs. The Multi-holster has a single collision box.
+
+The Single-holster only supports a single button and potion type, but you can add as many Wearables as you want to your VR body and configure them separately via their MCM sub-menus.
+This allows you to separate your potions by input or by location.
+
+### Pocketwatch (holster type)
+A small pouch that contains a pocketwatch. When you hover over it, the flap will open. Activating it will put the watch in your hand. Drop the watch to return it to the pouch.
+ 
+### Wristwatch (display type)
+Just like real life, but you don't need to wind or set it. Several models to choose from in the MCM.
+
+### Meters (display type)
+Successor to the Soul Gauge mod, 3 models to choose from:
+1. Amulet: consists of 1 to 4 individual meters, optionally with a wrist band attached.
+2. Thumb Ring: single ring with a single meter, can now be moved to any finger/knuckle.
+3. Multi Rings: 4 or 5 linked rings that split the meter value across them.
+
+Meter Values:
+* Health
+* Magicka
+* Stamina
+* Shout cooldown
+* Stealth level
+* Enchantment charge (left/ right)
+* Ammunition count
+* Durability (coming soon)
+* Survival mod needs (coming soon)
+
+
+### Major changes from the previous version:
+
+There are no longer inventory items for each Wearable. I don't like flooding the player's inventory with items. If you enable the "Use Toggle Item" option in the Debug section of the MCM, you will be given a piece of equipment that hides all Wearable items when unequipped. 
+
+There are no pop-up menus to select the meter type or position. This is done via the Configuration Mode instead (see relevant section for details).
+
+# Configuration
+You can configure every setting in the MCM menu, but since this is VR and I hate menus, there's also an interactive Configuration Mode.
+
+# Config Mode
+Is activated in a similar manner to VRIK holsters: 
+
+1. Ensure your hands are in a "grabbable" state (as defined by your HIGGS settings)
+
+1. Hover over the item (see Collision Spheres section for details)
+
+2. Hold down the _Config Button_ (default Grip) (for the Quiver, the _Last Arrow Button_ is used instead)
+
+3. After a short _delay_ (default 1.5 seconds) the controller will vibrate and you'll enter config mode. If you're using the "Hold & Sweep" interaction mode on a Holster Wearable, you may want to increase this delay.
+
+* If you move the controller past the _Threshold Distance_, you will enter Hold Mode and begin grabbing the item. Release the _Config Button_ to exit Config Mode. This is useful for making quick adjustments to a Wearable's position.
+* To use the more advanced Config Mode actions, activate Config Mode in the same manner, but release the _Config Button_ **without moving the controller past the _Threshold Distance_**. Now you are in Toggle Mode - to exit Config Mode from here, you must press any button on the *other* controller.
+* **IMPORTANT**: While in either Config Mode, Skyrim will not see any of your inputs (but other mods will). While hovering over an item OUTSIDE of config mode, momentary _Config Button_ presses will be passed to the game normally, but if you hold down the _Config Button_ to activate config mode, Skyrim will not receive that button press. Other mods like HIGGS and VRIK will always react to the button press.
+* You can disable either Hold or Toggle mode in the MCM via the _Lock Config Mode_ setting.
+
+## Config Actions
+Config Mode contains a few different actions. To activate one, hold its assigned button.
+
+### Grab (_Config Button_)
+* This is the same as moving VRIK holsters; moving the item past the _Reset Distance_ will reset its position.
+* While holding the item, tap the joystick to show its anchor point. You can then cycle through the available anchor points with further left/right joystick presses.
+* If you change an item's anchor from one hand or arm to the other, you will automatically exit Config Mode when the button is released.
+
+### Scale (_Default: B_)
+* Adjust the size of the item as you move the controller.
+* Like Grab, move the controller far away to reset the item to its default scale.
+* If the _Show Overlap Spheres_ debug option is enabled, the _Overlap Radius_ for this Wearable will be scaled instead.
+
+
+#### The following Actions are only applicable to Wearable Meters:
+
+### Sub-item Selection (Joystick)
+* For any meter that consists of multiple models *or* multiple meters, only one of these child objects can be configured at a time.
+* Move the joystick left/right while no other button is being pressed to select a sub-item.
+* The currently selected sub-item will be highlighted by a shader while no buttons are being pressed.
+
+
+### Function (_Default: Trigger_)
+* Cycle through the item's functions by moving the joystick left/right.
+* Changes which Meter Value is being displayed.
+
+### Color (_Default: A_)
+
+* The color wheel controls hue and saturation.
+* The left slider controls glow brightness.
+* The right slider controls specular intensity (highlights from light sources).
+* Color changes will be saved to that particular Meter Value and will apply to all instances of that model. 
+
+# Collision Spheres
+The _Overlap Radius_ for interacting with any Wearable item is defined in the Controls menu, but individual Wearables can also have their own overrides for this setting. All measurements in this mod are in "Skyrim units" which means it will be relative to your VR world scale.
+
+In the Debug menu, you can toggle the _Show Overlap Spheres_ option to show a 3D model of all this mod's collision spheres (including the ones belonging to the player's hands). This model will change from purple to yellow when interacted-with. While this setting is enabled, the Scale Action will apply to the collision sphere override for the selected Wearable instead of the 3D model of the Wearable. You can also assign the _Show Overlap Spheres_ toggle to a VRIK gesture if you hate using MCM-- look in the "Mod Actions" category.
+
+In addition to the radius, individual Wearables can also have an _Overlap Angle_ restriction (not set by default). This is the angle between the player's palm vector and the Wearable's normal vector, which are represented by red arrows when the _Show Overlap Spheres_ setting is enabled. The purpose of this setting is to further prevent accidental activation when using the same controls for other mods such as VRIK holsters or HIGGS. 
+
+# All MCM settings
+## Profile
+## Controls
+* _Lock Config Mode_
+* _Threshold Distance_
+* _Reset Distance_
+* _Overlap Radius_
+* _Overlap Angle_
+* _Config Delay_
+* _Config Button_
+* _Scale Button_
+* _Function Button_
+* _Color Button_
+## Debug
+* _Show Overlap Spheres_
+* _Use Toggle Item_
+* 
+## Quiver
+
+
+
+
+# Known Issues
+1. Controller movement is sometimes jerky in config mode. This is due to my dumb input smoothing algorithm which I'll replace when I have time.

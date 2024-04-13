@@ -36,7 +36,7 @@ namespace wearable
 			float           reset_distance = 20.f;
 			int             enter_config_tap_delay_min_ms = 100;
 			int             enter_config_tap_delay_max_ms = 900;
-			int 			update_frames = 10;
+			int             update_frames = 10;
 			bool            block_mode_control_on_overlap = true;
 			bool            allow_reattach = true;
 			vr::EVRButtonId enter_config_mode = vr::k_EButton_Grip;
@@ -70,7 +70,7 @@ namespace wearable
 
 		ManagerState const GetState() { return configmode_state; }
 		void const         SetState(ManagerState a_next) { configmode_next_state = a_next; }
-		std::weak_ptr<Wearable> const GetSelectedItem() { return configmode_selected_item; }
+		std::weak_ptr<Wearable> const GetSelectedItem() { return hovered_wearable; }
 
 		/** this is only public so that the plugin can shut down config mode on game save event */
 		void StateTransition(ManagerState a_next_state);
@@ -117,6 +117,7 @@ namespace wearable
 		RE::NiTransform                      configmode_wearable_initial_world;
 		RE::NiTransform                      configmode_wearable_initial_local;
 		RE::NiTransform                      configmode_hand_initial;
+		std::weak_ptr<Wearable>              hovered_wearable;
 		std::weak_ptr<Wearable>              configmode_selected_item;
 		int                                  configmode_selected_subitem_index;
 		int                                  configmode_hovered_sphere_id = 0;
@@ -152,6 +153,7 @@ namespace wearable
 		virtual void            Update(int arg) = 0;
 		virtual RE::NiAVObject* Get3D() { return model ? model->Get3D() : nullptr; }
 
+		virtual void OverlapHandler(const vrinput::OverlapEvent& e) {}
 
 		virtual void        CycleSubitems(bool a_inc) {}
 		virtual void        CycleFunction(bool a_inc) {}

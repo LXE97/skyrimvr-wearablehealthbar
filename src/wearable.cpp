@@ -29,14 +29,14 @@ namespace wearable
 					{
 						mgr->configmode_active_hand = e.device;
 						mgr->ApplySelectionShader(sp->Get3D());
-						mgr->SetState(ManagerState::kHolding);
+						mgr->SetState(ManagerState::kIdle);
 					}
 				}
 				else { last_tap_time = std::chrono::steady_clock::now(); }
 			}
 			else
-			{  // secondary function: change selected object
-				if (auto sp = mgr->configmode_selected_item.lock())
+			{  // TODO secondary function: change selected object
+				/*if (auto sp = mgr->configmode_selected_item.lock())
 				{
 					if (sp->interactable->GetId() != mgr->configmode_hovered_sphere_id)
 					{
@@ -48,14 +48,11 @@ namespace wearable
 							mgr->ApplySelectionShader(sp2->Get3D());
 						}
 					}
-				}
+				}*/
 			}
 		}
-		else
-		{
-			if (mgr->GetState() == ManagerState::kHolding) { mgr->SetState(ManagerState::kIdle); }
-		}
-		return false;
+
+		return true;
 	}
 
 	bool WearableManager::ExitConfigModeControl(const vrinput::ModInputEvent& e)
@@ -213,14 +210,23 @@ namespace wearable
 	void WearableManager::OverlapHandler(const vrinput::OverlapEvent& e)
 	{
 		auto mgr = WearableManager::GetSingleton();
+
 		if (e.entered)
 		{
-			// Only change selected object when not in configuration mode or event was triggered
-			// by the hand that activated configuration mode
-			if (mgr->configmode_state == ManagerState::kNone ||
-				e.triggered_by == mgr->configmode_active_hand)
+			// in configuration mode, all non-configurative interaction is disabled
+			if (mgr->configmode_state == ManagerState::kNone)
 			{
+				// look up which wearable the overlapped sphere belongs to
 				mgr->configmode_hovered_sphere_id = e.id;
+				auto wp = mgr->FindWearableWithOverlapID(e.id);
+
+				if (auto sp = wp.lock())
+				{
+					// update our weak pointer
+					mgr->hovered_wearable = wp;
+					// delegate the overlap event to the wearable
+					sp->OverlapHandler(e);
+				}
 			}
 
 			vrinput::AddCallback(EnterConfigModeControl, mgr->settings.enter_config_mode,
@@ -228,7 +234,24 @@ namespace wearable
 		}
 		else
 		{
-			mgr->configmode_hovered_sphere_id = -1;
+			// on exiting the overlap sphere, we need to delegate the exit event to the hovered wearable.
+			// Since we're exiting, it must already be selected and it can use our weak pointer to get a reference to itself
+			// from within the static button handler
+
+			// TODO: but what about the case where you have overlapping sphere from multiple wearables...
+			// you could have 2 Enter events in a row with no exit. Then the next Exit event might not refer to the
+			// currently selected item ._.
+
+			if (auto sp = mgr->configmode_selected_item.lock())
+			{
+				// delegate the overlap event to the wearable
+				sp->OverlapHandler(e);
+			}
+
+			// clear the selection variables
+			mgr->hovered_wearable = std::weak_ptr<Wearable>();
+			//mgr->configmode_hovered_sphere_id = -1;
+
 			vrinput::RemoveCallback(EnterConfigModeControl, mgr->settings.enter_config_mode,
 				e.triggered_by, vrinput::ActionType::kPress);
 		}

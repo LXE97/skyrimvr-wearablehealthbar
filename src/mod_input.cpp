@@ -87,7 +87,7 @@ namespace vrinput
 		const Hand a_hand, const ActionType a_touch_or_press)
 	{
 		// TODO RemoveHoldCallback
-	} 
+	}
 
 	void SendFakeInputEvent(const ModInputEvent a_event)
 	{
@@ -342,13 +342,22 @@ namespace vrinput
 					}
 				}
 
+				if (block_all_inputs)
+				{
+					pOutputControllerState->ulButtonPressed = 0;
+					pOutputControllerState->ulButtonTouched = 0;
+					pOutputControllerState->rAxis[0].x = 0;
+					pOutputControllerState->rAxis[0].y = 0;
+					local_trigger = 0;
+				}
+
 				// TODO: make these static?
 
 				AsmSetControllerAxes code_set_axes;
 				code_set_axes.ready();
 				auto SetControllerAxes = code_set_axes.getCode<void (*)(float, float, float)>();
 				SetControllerAxes(
-					pControllerState->rAxis[0].x, pControllerState->rAxis[0].y, local_trigger);
+					pOutputControllerState->rAxis[0].x, pOutputControllerState->rAxis[0].y, local_trigger);
 
 				AsmSetControllerState code_set_buttons;
 				code_set_buttons.ready();

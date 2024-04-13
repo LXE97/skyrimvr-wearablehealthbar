@@ -26,9 +26,9 @@ namespace vrinput
 	{
 		friend class OverlapSphereManager;
 
-	public:
+	public: // TODO: set default angle to number that effectively disables it
 		static std::shared_ptr<OverlapSphere> Make(RE::NiAVObject* a_attach_to,
-			OverlapCallback a_callback, float a_radius, float a_max_angle_deg = 0.0f,
+			OverlapCallback a_callback, float a_radius, float a_max_angle_deg = 179.0f,
 			Hand                a_active_hand = Hand::kBoth,
 			const RE::NiPoint3& a_offset = RE::NiPoint3(0.0, 0.0, 0.0),
 			const RE::NiPoint3& a_normal = RE::NiPoint3(1.0, 0.0, 0.0));

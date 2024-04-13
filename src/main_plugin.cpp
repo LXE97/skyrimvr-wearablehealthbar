@@ -28,34 +28,13 @@ namespace wearable_plugin
 	// DEBUG
 	NiPoint3                       g_higgs_palmPosHandspace;
 	std::vector<float>             times;
-	std::shared_ptr<WearableMeter> w;
-	OverlapSpherePtr               bowsphere;
+	std::shared_ptr<WearableMeter> g_test_meter;
+	std::shared_ptr<BoltQuiver>    g_test_quiver;
 
 	bool OnDEBUGBtnPressB(const ModInputEvent& e)
 	{
-		if (e.button_state == ButtonState::kButtonDown)
-		{
-			SKSE::log::trace("B press");
-			SetFakeButtonState({ .device = Hand::kRight,
-				.touch_or_press = ActionType::kPress,
-				.button_state = ButtonState::kButtonDown,
-				.button_ID = vr::k_EButton_SteamVR_Trigger });
-			SetFakeButtonState({ .device = Hand::kRight,
-				.touch_or_press = ActionType::kTouch,
-				.button_state = ButtonState::kButtonDown,
-				.button_ID = vr::k_EButton_SteamVR_Trigger });
-		}
-		else
-		{
-			ClearFakeButtonState({ .device = Hand::kRight,
-				.touch_or_press = ActionType::kPress,
-				.button_state = ButtonState::kButtonDown,
-				.button_ID = vr::k_EButton_SteamVR_Trigger });
-			ClearFakeButtonState({ .device = Hand::kRight,
-				.touch_or_press = ActionType::kTouch,
-				.button_state = ButtonState::kButtonDown,
-				.button_ID = vr::k_EButton_SteamVR_Trigger });
-		}
+		if (e.button_state == ButtonState::kButtonDown) { SKSE::log::trace("B press"); }
+		else {}
 		return false;
 	}
 
@@ -73,109 +52,10 @@ namespace wearable_plugin
 		return false;
 	}
 
-	bool AutoArrowNockEnd(const ModInputEvent& e)
-	{
-		SKSE::log::trace(
-			"clear fake trigger, event from {} button {}", (int)e.device, (int)e.button_ID);
-		ClearFakeButtonState({ .device = Hand::kRight,
-			.touch_or_press = ActionType::kPress,
-			.button_state = ButtonState::kButtonDown,
-			.button_ID = vr::k_EButton_SteamVR_Trigger });
-		ClearFakeButtonState({ .device = Hand::kRight,
-			.touch_or_press = ActionType::kTouch,
-			.button_state = ButtonState::kButtonDown,
-			.button_ID = vr::k_EButton_SteamVR_Trigger });
-
-		// TODO: does e actually contain all the parameters? cb not being removed
-		vrinput::RemoveCallback(AutoArrowNockEnd, e.button_ID, e.device, vrinput::ActionType::kPress);
-
-		return false;
-	}
-
-	void AutoArrowNockStart(const OverlapEvent& e)
-	{
-		if (e.entered)
-		{
-			SKSE::log::trace("bow overlap");
-			// Check if the player is holding a bow
-			if (auto equip = PlayerCharacter::GetSingleton()->GetEquippedObject(true))
-			{
-				if (auto weap = equip->As<TESObjectWEAP>(); weap && weap->IsBow())
-				{
-					// Check if the player is holding an arrow
-					if (PlayerCharacter::GetSingleton()->GetCurrentAmmo())
-					{
-						// TODO: left handed mode
-						auto arrow_hand = vrinput::Hand::kRight;
-
-						if (GetButtonState(vr::k_EButton_SteamVR_Trigger, arrow_hand,
-								vrinput::ActionType::kPress) == vrinput::ButtonState::kButtonDown)
-						{
-							// no callback needed for the trigger, just send momentary release
-							SendFakeInputEvent({ .device = arrow_hand,
-								.touch_or_press = ActionType::kPress,
-								.button_state = ButtonState::kButtonUp,
-								.button_ID = vr::k_EButton_SteamVR_Trigger });
-
-							return;
-						}
-
-						// Find out which buttons are held down on the arrow's hand. We will
-						// add a release listener to only one of them based on priority
-
-						if (GetButtonState(vr::k_EButton_A, arrow_hand,
-								vrinput::ActionType::kPress) == vrinput::ButtonState::kButtonDown)
-						{
-							vrinput::AddCallback(AutoArrowNockEnd, vr::k_EButton_A, arrow_hand,
-								vrinput::ActionType::kPress);
-						}
-						else if (GetButtonState(vr::k_EButton_Knuckles_B, arrow_hand,
-									 vrinput::ActionType::kPress) ==
-							vrinput::ButtonState::kButtonDown)
-						{
-							vrinput::AddCallback(AutoArrowNockEnd, vr::k_EButton_Knuckles_B, arrow_hand,
-								vrinput::ActionType::kPress);
-						}
-						else if (GetButtonState(vr::k_EButton_SteamVR_Touchpad, arrow_hand,
-									 vrinput::ActionType::kPress) ==
-							vrinput::ButtonState::kButtonDown)
-						{
-							vrinput::AddCallback(AutoArrowNockEnd, vr::k_EButton_SteamVR_Touchpad,
-								arrow_hand, vrinput::ActionType::kPress);
-						}
-						else if (GetButtonState(
-									 vr::k_EButton_Grip, arrow_hand, vrinput::ActionType::kPress) ==
-							vrinput::ButtonState::kButtonDown)
-						{
-							vrinput::AddCallback(AutoArrowNockEnd, vr::k_EButton_Grip, arrow_hand,
-								vrinput::ActionType::kPress);
-						}
-						else
-						{
-							SKSE::log::trace("AutoArrowNockStart: no button press");
-							return;  // the player must have let go of the arrow button, do nothing
-						}
-
-						SKSE::log::trace("AutoArrowNockStart: starting fake trigger press");
-						// Start holding down the trigger
-						SetFakeButtonState({ .device = arrow_hand,
-							.touch_or_press = ActionType::kPress,
-							.button_state = ButtonState::kButtonDown,
-							.button_ID = vr::k_EButton_SteamVR_Trigger });
-						SetFakeButtonState({ .device = arrow_hand,
-							.touch_or_press = ActionType::kTouch,
-							.button_state = ButtonState::kButtonDown,
-							.button_ID = vr::k_EButton_SteamVR_Trigger });
-					}
-				}
-			}
-		}
-	}
-
 	// test meter
 	void meterinit()
 	{
-		w.reset();
+		g_test_meter.reset();
 		NiTransform t;
 		t.rotate = { { -0.22850621, -0.9327596, -0.2670444 },
 			{ -0.9581844, 0.21687761, 0.08220619 }, { -0.020597734, 0.2866351, -0.9453561 } };
@@ -187,14 +67,31 @@ namespace wearable_plugin
 		std::vector<Meter::MeterValue> testValues = { Meter::MeterValue::kHealth,
 			Meter::MeterValue::kMagicka, Meter::MeterValue::kStamina, Meter::MeterValue::kStealth };
 
-		w = std::make_shared<WearableMeter>("wearable\\meters\\eye-triple.nif",
+		g_test_meter = std::make_shared<WearableMeter>("wearable\\meters\\eye-triple.nif",
 			PlayerCharacter::GetSingleton()->Get3D(false)->GetObjectByName("NPC L Hand [LHnd]"), t,
 			NiPoint3(-2.0f, 0, 0), &parents);
-		WearableManager::GetSingleton()->Register(w);
-		w->meters.push_back(std::make_unique<LinearMeter>(1, testValues));
-		w->meters.push_back(std::make_unique<LinearMeter>(0, testValues));
-		w->meters.push_back(std::make_unique<LinearMeter>(2, testValues));
-		w->meters.push_back(std::make_unique<EyeMeter>(3, testValues));
+		WearableManager::GetSingleton()->Register(g_test_meter);
+		g_test_meter->meters.push_back(std::make_unique<LinearMeter>(1, testValues));
+		g_test_meter->meters.push_back(std::make_unique<LinearMeter>(0, testValues));
+		g_test_meter->meters.push_back(std::make_unique<LinearMeter>(2, testValues));
+		g_test_meter->meters.push_back(std::make_unique<EyeMeter>(3, testValues));
+	}
+
+	void quiverInit()
+	{
+		NiTransform t;
+		t.translate = { 0.f, 30.f, 0.f };
+		HolsterSettings settings = { //.model_path = "wearable/HelperSphereAxis.nif",
+			.model_path = "dlc01/weapons/crossbow/steelbolt_clone.nif",
+			.attach_node = PlayerCharacter::GetSingleton()->Get3D(false)->GetObjectByName(
+				"NPC L Thigh [LThg]"),
+			.eligible_parents = { "NPC Pelvis [Pelv]", "NPC L Thigh [LThg]", "NPC R Thigh [RThg]",
+				"NPC Spine1 [Spn1]", "NPC Spine2 [Spn2]",
+				},
+				.local = t
+		};
+		g_test_quiver = std::make_shared<BoltQuiver>(settings);
+		WearableManager::GetSingleton()->Register(g_test_quiver);
 	}
 
 	bool runonce = false;
@@ -203,10 +100,7 @@ namespace wearable_plugin
 		if (!runonce)
 		{
 			//meterinit();
-			// TODO: put this in equip event for bow
-			bowsphere = OverlapSphere::Make(
-				PlayerCharacter::GetSingleton()->Get3D(false)->GetObjectByName("SHIELD"),
-				AutoArrowNockStart, 15, 0, Hand::kRight, { -14, 6, 0 });
+			quiverInit();
 			runonce = true;
 		}
 
