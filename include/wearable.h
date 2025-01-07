@@ -1,7 +1,7 @@
 #pragma once
 #include "art_addon.h"
 #include "higgsinterface001.h"
-#include "mod_input.h"
+#include "vrinput.h"
 #include "overlap_sphere.h"
 #include "vrikinterface001.h"
 

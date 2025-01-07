@@ -65,10 +65,8 @@ namespace wearable
 	private:
 		void OverlapHandler(const vrinput::OverlapEvent& e) override;
 
-		// TODO this is annoying, figure out if I can use non static methods
 		static bool EquipButtonHandler(const vrinput::ModInputEvent& e);
 
-		// might not be so bad actually
 		void EquipButtonHandler_impl(const vrinput::ModInputEvent& e);
 
 		vr::EVRButtonId interact_button = vr::k_EButton_SteamVR_Trigger;
